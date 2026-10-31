@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stream Auto Clipper | AI Pipeline Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0b10;
+      --card-bg: rgba(22, 24, 35, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --twitch-purple: #9146FF;
+      --kick-green: #53FC18;
+      --yt-red: #FF0000;
+      --accent-glow: #6366f1;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #131726 0%, var(--bg-dark) 100%);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 28px;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 13.5px;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 28px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Channel List */
+    .channel-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+
+    .channel-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .channel-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .platform-tag {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .platform-twitch {
+      background: rgba(145, 70, 255, 0.15);
+      color: var(--twitch-purple);
+      border: 1px solid rgba(145, 70, 255, 0.3);
+    }
+
+    .platform-kick {
+      background: rgba(83, 252, 24, 0.15);
+      color: var(--kick-green);
+      border: 1px solid rgba(83, 252, 24, 0.3);
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 20px;
+    }
+
+    .badge-live {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+
+    .badge-offline {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-muted);
+    }
+
+    /* Form */
+    .input-group {
+      margin-bottom: 14px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent-glow);
+    }
+
+    /* Clips Feed */
+    .clips-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    .clips-table th {
+      text-align: left;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .clips-table td {
+      padding: 14px;
+      font-size: 13.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+
+    .status-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    .status-READY_TO_PUBLISH {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-PUBLISHED {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .status-DOWNLOADING, .status-TRANSCRIBING, .status-ANALYZING, .status-EDITING {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .status-FAILED {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+
+    .viral-score {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 13px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 3px 7px;
+      border-radius: 6px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: #151824;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 26px;
+      max-width: 500px;
+      width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <div class="logo-badge">⚡</div>
+        <div>
+          <h1>Stream Auto Clipper AI</h1>
+          <p class="subtitle">Detección de directos • Recorte 9:16 FaceCam • Subtítulos Dinámicos • Publicación Automática</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-secondary" onclick="scanChannels()">🔄 Escanear Ahora</button>
+        <button class="btn-primary" onclick="openTestClipModal()">✨ Probar con un Clip URL</button>
+      </div>
+    </header>
+
+    <!-- Social Accounts Status Bar -->
+    <div style="display: flex; gap: 14px; margin-bottom: 24px; padding: 14px 20px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; align-items: center; flex-wrap: wrap;">
+      <span style="font-weight: 700; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cuentas Vinculadas:</span>
+      <span id="badge-yt" class="platform-tag" style="background: rgba(255, 0, 0, 0.15); border: 1px solid rgba(255, 0, 0, 0.4); color: #ff4d4d; font-size: 13px; padding: 6px 14px;">
+        🔴 YouTube: <strong id="status-yt">Cargando...</strong>
+      </span>
+      <span id="badge-tk" class="platform-tag" style="background: rgba(0, 242, 234, 0.15); border: 1px solid rgba(0, 242, 234, 0.4); color: #00f2fe; font-size: 13px; padding: 6px 14px;">
+        🎵 TikTok: <strong id="status-tk">Cargando...</strong>
+      </span>
+      <span id="badge-ig" class="platform-tag" style="background: rgba(225, 48, 108, 0.15); border: 1px solid rgba(225, 48, 108, 0.4); color: #ff4da6; font-size: 13px; padding: 6px 14px;">
+        📸 Instagram Reels: <strong id="status-ig">Cargando...</strong>
+      </span>
+    </div>
+
+    <div class="dashboard-grid">
+      <!-- Left Column: Channels & Add Channel -->
+      <div>
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-title">
+            <span>📺 Canales Monitoreados</span>
+            <span id="channel-count" style="font-size: 12px; color: var(--text-muted);">0 activos</span>
+          </div>
+          <div id="channels-container">
+            <p style="color: var(--text-muted); font-size: 13px;">Cargando canales...</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-title">➕ Agregar Nuevo Canal</div>
+          <form id="add-channel-form" onsubmit="addChannel(event)">
+            <div class="input-group">
+              <label>Plataforma</label>
+              <select id="new-platform">
+                <option value="twitch">Twitch</option>
+                <option value="kick">Kick</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Nombre de Usuario / Canal</label>
+              <input type="text" id="new-channel-name" placeholder="ej. ibai, xqc, westcol" required>
+            </div>
+            <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">
+              Guardar y Monitorear
+            </button>
+          </form>
+        </div>
+
+        <!-- Compilations Management Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>🎞️ Videos Largos (10 Min)</span>
+            <button class="btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="loadCompilations()">Actualizar</button>
+          </div>
+          <div id="compilations-container">
+            <p style="color: var(--text-muted); font-size: 12px;">No hay recopilaciones creadas aún.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Processed Clips & Viral Pipeline -->
+      <div>
+        <div class="card">
+          <div class="card-title" style="flex-wrap: wrap; gap: 12px;">
+            <span>🎬 Cola de Clips y Shorts Generados</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="openCompilationModal()">
+                🎬 Compilar Seleccionados (10 min)
+              </button>
+              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadClips()">Actualizar</button>
+            </div>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="clips-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;"><input type="checkbox" id="select-all-clips" onchange="toggleSelectAllClips(this)"></th>
+                  <th>Clip / Título Viral</th>
+                  <th>Plataforma</th>
+                  <th>Virality Score</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="clips-tbody">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                    No hay clips procesados aún. Agrega un canal en vivo o prueba con la URL de un clip.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compilation Creation Modal -->
+  <div id="compilation-modal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 14px;">🎞️ Crear Video Recopilatorio (10 min)</h3>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 18px;">
+        Los clips seleccionados se unirán en un solo video horizontal (16:9 1080p) optimizado para monetización en YouTube.
+      </p>
+      <form onsubmit="submitCompilation(event)">
+        <div class="input-group">
+          <label>Título del Video de YouTube</label>
+          <input type="text" id="compilation-title" placeholder="MEJORES MOMENTOS DE TWITCH DE LA SEMANA #1" required>
+        </div>
+        <div class="input-group">
+          <label>Descripción</label>
+          <textarea id="compilation-desc" rows="3" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); color: #fff; padding: 10px; border-radius: 8px;" placeholder="Recopilación épica con los mejores momentos de Ibai y AuronPlay..."></textarea>
+        </div>
+        <div style="margin-bottom: 16px; font-size: 13px; color: #a5b4fc;">
+          Clips seleccionados: <strong id="selected-clips-count">0</strong>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn-secondary" onclick="closeCompilationModal()">Cancelar</button>
+          <button type="submit" class="btn-primary">Generar Video</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="test-clip-modal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 16px;">🚀 Procesar Clip Manualmente</h3>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 18px;">
+        Ingresa el enlace de un clip de Twitch o Kick para probar todo el pipeline de IA (Whisper, Gemini y render vertical).
+      </p>
+      <form onsubmit="submitTestClip(event)">
+        <div class="input-group">
+          <label>URL del Clip (Twitch / Kick / MP4)</label>
+          <input type="url" id="test-clip-url" placeholder="https://clips.twitch.tv/..." required>
+        </div>
+        <div class="input-group">
+          <label>Estilo de Formato Vertical 9:16</label>
+          <select id="test-clip-layout">
+            <option value="blur">✨ Fondo Desenfocado Dinámico (Ideal para Gaming) - Recomendado</option>
+            <option value="center">👤 Recorte Vertical Centrado (Ideal para Charla / Podcast)</option>
+            <option value="split">📱 Pantalla Dividida (FaceCam Arriba + Juego Abajo)</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button type="button" class="btn-secondary" onclick="closeTestClipModal()">Cancelar</button>
+          <button type="submit" class="btn-primary">Iniciar Pipeline</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function loadChannels() {
+      try {
+        const res = await fetch('/api/channels');
+        const data = await res.json();
+        const container = document.getElementById('channels-container');
+        document.getElementById('channel-count').innerText = `${data.length} canal(es)`;
+
+        if (!data || data.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-muted); font-size: 13px;">No has agregado canales aún.</p>';
+          return;
+        }
+
+        container.innerHTML = data.map(ch => `
+          <div class="channel-item">
+            <div class="channel-info">
+              <span class="platform-tag platform-${ch.platform}">${ch.platform}</span>
+              <div>
+                <strong style="font-size: 14px;">${ch.channel_name}</strong>
+                <div style="font-size: 11px; color: var(--text-muted);">${ch.stream_game || 'Variado'}</div>
+              </div>
+            </div>
+            <div>
+              <span class="live-badge ${ch.is_live ? 'badge-live' : 'badge-offline'}">
+                ${ch.is_live ? 'EN VIVO' : 'OFFLINE'}
+              </span>
+              <button onclick="deleteChannel(${ch.id})" style="background: none; border: none; color: #ef4444; margin-left: 8px; cursor: pointer;">✕</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadSocialStatus() {
+      try {
+        const res = await fetch('/api/socials/status');
+        const data = await res.json();
+        
+        const yt = document.getElementById('status-yt');
+        const tk = document.getElementById('status-tk');
+        const ig = document.getElementById('status-ig');
+
+        yt.innerText = data.youtube ? '🟢 Conectado' : '⚪ Desconectado';
+        tk.innerText = data.tiktok ? '🟢 Conectado' : '⚪ Desconectado';
+        ig.innerText = data.instagram ? '🟢 Conectado' : '⚪ Desconectado';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadCompilations() {
+      try {
+        const res = await fetch('/api/compilations');
+        const data = await res.json();
+        const container = document.getElementById('compilations-container');
+
+        if (!data || data.length === 0) {
+          container.innerHTML = '<p style="color: var(--text-muted); font-size: 12px;">No hay recopilaciones creadas aún.</p>';
+          return;
+        }
+
+        container.innerHTML = data.map(c => `
+          <div style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 10px;">
+            <strong style="display:block; font-size: 13px; margin-bottom: 4px;">${c.title}</strong>
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+              Estado: <span class="status-pill status-${c.status}">${c.status}</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              ${c.output_path ? `
+                <a href="/storage/compilations/${c.output_path.split(/[\\\\/]/).pop()}" target="_blank" class="btn-secondary" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Ver Video (16:9)</a>
+                ${c.status !== 'PUBLISHED' ? `
+                  <button onclick="publishCompilation(${c.id})" class="btn-primary" style="padding: 3px 8px; font-size: 11px;">Subir a YouTube</button>
+                ` : `
+                  <span style="font-size: 11px; color: #10b981; font-weight: 600;">✓ En YouTube</span>
+                `}
+              ` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    let selectedClipIds = new Set();
+
+    function toggleClipSelection(id, checkbox) {
+      if (checkbox.checked) {
+        selectedClipIds.add(id);
+      } else {
+        selectedClipIds.delete(id);
+      }
+      document.getElementById('selected-clips-count').innerText = selectedClipIds.size;
+    }
+
+    function toggleSelectAllClips(masterCheckbox) {
+      const boxes = document.querySelectorAll('.clip-checkbox');
+      boxes.forEach(b => {
+        b.checked = masterCheckbox.checked;
+        const id = parseInt(b.getAttribute('data-clip-id'));
+        if (masterCheckbox.checked) selectedClipIds.add(id);
+        else selectedClipIds.delete(id);
+      });
+      document.getElementById('selected-clips-count').innerText = selectedClipIds.size;
+    }
+
+    function openCompilationModal() {
+      if (selectedClipIds.size === 0) {
+        alert('Por favor selecciona al menos 1 o varios clips usando las casillas a la izquierda para compilarlos.');
+        return;
+      }
+      document.getElementById('selected-clips-count').innerText = selectedClipIds.size;
+      document.getElementById('compilation-modal').style.display = 'flex';
+    }
+
+    function closeCompilationModal() {
+      document.getElementById('compilation-modal').style.display = 'none';
+    }
+
+    async function submitCompilation(e) {
+      e.preventDefault();
+      const title = document.getElementById('compilation-title').value.trim();
+      const description = document.getElementById('compilation-desc').value.trim();
+      if (!title) return;
+
+      closeCompilationModal();
+      alert(`Generando video recopilatorio de ${selectedClipIds.size} clips con FFmpeg... Esto puede tardar 1 o 2 minutos según la duración.`);
+
+      const res = await fetch('/api/compilations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title,
+          description: description,
+          clip_ids: Array.from(selectedClipIds)
+        })
+      });
+      const data = await res.json();
+      alert('Compilación finalizada: ' + (data.success ? '¡Video listo para publicar o ver!' : 'Error: ' + data.error));
+      loadCompilations();
+    }
+
+    async function publishCompilation(id) {
+      if (!confirm(`¿Subir este video recopilatorio largo a tu canal de YouTube?`)) return;
+      const res = await fetch(`/api/compilations/${id}/publish`, { method: 'POST' });
+      const data = await res.json();
+      alert(JSON.stringify(data, null, 2));
+      loadCompilations();
+    }
+
+    async function loadClips() {
+      try {
+        const res = await fetch('/api/clips');
+        const clips = await res.json();
+        const tbody = document.getElementById('clips-tbody');
+
+        if (!clips || clips.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No hay clips procesados aún.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = clips.map(c => `
+          <tr>
+            <td>
+              <input type="checkbox" class="clip-checkbox" data-clip-id="${c.id}" ${selectedClipIds.has(c.id) ? 'checked' : ''} onchange="toggleClipSelection(${c.id}, this)">
+            </td>
+            <td>
+              <strong style="display:block; font-size: 14px;">${c.ai_title || c.original_title || 'Clip #' + c.id}</strong>
+              <small style="color: var(--text-muted);">${c.ai_category || 'general'} • ${c.duration_seconds.toFixed(0)}s</small>
+            </td>
+            <td><span class="platform-tag platform-${c.source_platform}">${c.source_platform}</span></td>
+            <td><span class="viral-score">⭐ ${c.ai_score ? c.ai_score.toFixed(1) : '-'}</span></td>
+            <td><span class="status-pill status-${c.status}">${c.status}</span></td>
+            <td>
+              ${c.processed_path_vertical ? `
+                <a href="/storage/processed/${c.processed_path_vertical.split(/[\\\\/]/).pop()}" target="_blank" class="btn-secondary" style="padding: 4px 10px; font-size: 11px; text-decoration: none;">Ver Short</a>
+                <button onclick="publishClip(${c.id})" class="btn-primary" style="padding: 4px 10px; font-size: 11px; margin-left: 6px;">Publicar</button>
+              ` : `
+                <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">Reintentar</button>
+              `}
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function addChannel(e) {
+      e.preventDefault();
+      const platform = document.getElementById('new-platform').value;
+      const channel_name = document.getElementById('new-channel-name').value.trim();
+      if (!channel_name) return;
+
+      await fetch('/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, channel_name })
+      });
+      document.getElementById('new-channel-name').value = '';
+      loadChannels();
+    }
+
+    async function deleteChannel(id) {
+      if (!confirm('¿Eliminar este canal?')) return;
+      await fetch(`/api/channels/${id}`, { method: 'DELETE' });
+      loadChannels();
+    }
+
+    async function scanChannels() {
+      const btn = event.target;
+      btn.innerText = 'Escaneando...';
+      await fetch('/api/scan', { method: 'POST' });
+      await loadChannels();
+      await loadClips();
+      btn.innerText = '🔄 Escanear Ahora';
+    }
+
+    function openTestClipModal() {
+      document.getElementById('test-clip-modal').style.display = 'flex';
+    }
+
+    function closeTestClipModal() {
+      document.getElementById('test-clip-modal').style.display = 'none';
+    }
+
+    async function submitTestClip(e) {
+      e.preventDefault();
+      const url = document.getElementById('test-clip-url').value.trim();
+      const layout = document.getElementById('test-clip-layout').value;
+      if (!url) return;
+
+      closeTestClipModal();
+      alert('Clip añadido a la cola. El pipeline (descarga, transcripción, Gemini y edición) se está ejecutando en segundo plano.');
+      await fetch('/api/clips/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip_url: url, layout: layout })
+      });
+      loadClips();
+    }
+
+    async function publishClip(id) {
+      if (!confirm(`¿Publicar Short #${id} a redes sociales (YouTube Shorts, TikTok e Instagram)?`)) return;
+      const res = await fetch(`/api/clips/${id}/publish`, { method: 'POST' });
+      const data = await res.json();
+      alert(JSON.stringify(data, null, 2));
+      loadClips();
+    }
+
+    async function reprocessClip(id) {
+      await fetch(`/api/clips/${id}/process`, { method: 'POST' });
+      loadClips();
+    }
+
+    // Auto-refresh every 15 seconds
+    loadSocialStatus();
+    loadChannels();
+    loadClips();
+    loadCompilations();
+    setInterval(() => {
+      loadSocialStatus();
+      loadChannels();
+      loadClips();
+      loadCompilations();
+    }, 15000);
+  </script>
+</body>
+</html>
