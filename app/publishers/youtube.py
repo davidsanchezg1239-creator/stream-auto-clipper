@@ -28,29 +28,53 @@ class YouTubePublisher:
 
             creds = None
             if self.token_file.exists():
-                creds = Credentials.from_authorized_user_file(str(self.token_file), self.scopes)
+                try:
+                    creds = Credentials.from_authorized_user_file(str(self.token_file), self.scopes)
+                except Exception as load_err:
+                    logger.warning(f"Error loading youtube_token.json: {load_err}")
 
             if creds and creds.expired and creds.refresh_token:
-                logger.info("Refreshing expired YouTube OAuth token...")
-                creds.refresh(Request())
-                with open(self.token_file, "w", encoding="utf-8") as token:
-                    token.write(creds.to_json())
-
-            if not creds or not creds.valid:
-                if self.secrets_file.exists():
-                    flow = InstalledAppFlow.from_client_secrets_file(str(self.secrets_file), self.scopes)
-                    creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
+                logger.info("Attempting to refresh YouTube OAuth token...")
+                try:
+                    creds.refresh(Request())
                     with open(self.token_file, "w", encoding="utf-8") as token:
                         token.write(creds.to_json())
-                else:
-                    logger.warning(f"YouTube client secrets file not found: {self.secrets_file}")
-                    return None
+                    logger.info("YouTube OAuth token refreshed successfully.")
+                except Exception as refresh_err:
+                    logger.warning(f"YouTube refresh token expired or revoked ({refresh_err}). Needs re-authentication.")
+                    creds = None
+                    try:
+                        self.token_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+            if not creds or not creds.valid:
+                logger.warning(f"YouTube credentials invalid or expired. Re-authentication required.")
+                return None
 
             self.service = build("youtube", "v3", credentials=creds)
             return self.service
         except Exception as e:
             logger.error(f"Failed to authenticate with YouTube API: {e}")
             return None
+
+    def start_oauth_flow(self) -> Dict[str, Any]:
+        """Runs interactive Google OAuth browser flow to authenticate YouTube."""
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        if not self.secrets_file.exists():
+            return {"success": False, "error": f"client_secret.json no encontrado en {self.secrets_file}"}
+
+        try:
+            flow = InstalledAppFlow.from_client_secrets_file(str(self.secrets_file), self.scopes)
+            creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
+            with open(self.token_file, "w", encoding="utf-8") as token:
+                token.write(creds.to_json())
+            self.service = None  # Reset service to pick up new creds
+            logger.info("YouTube OAuth authentication completed successfully!")
+            return {"success": True, "message": "Cuenta de YouTube vinculada exitosamente."}
+        except Exception as e:
+            logger.error(f"Error during YouTube OAuth flow: {e}")
+            return {"success": False, "error": str(e)}
 
     async def upload_video(
         self,

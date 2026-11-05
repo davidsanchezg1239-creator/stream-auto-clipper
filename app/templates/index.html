@@ -541,12 +541,12 @@
             <table class="clips-table">
               <thead>
                 <tr>
-                  <th style="width: 40px;"><input type="checkbox" id="select-all-clips" onchange="toggleSelectAllClips(this)"></th>
-                  <th>Clip / Título Viral</th>
-                  <th>Plataforma</th>
-                  <th>Virality Score</th>
-                  <th>Estado</th>
-                  <th>Acción</th>
+                  <th style="width: 36px;"><input type="checkbox" id="select-all-clips" onchange="toggleSelectAllClips(this)"></th>
+                  <th style="width: 170px;">Streamer & Juego</th>
+                  <th>Momento / Título Viral</th>
+                  <th style="width: 130px;">Score & Tipo</th>
+                  <th style="width: 110px;">Estado</th>
+                  <th style="width: 210px;">Acciones</th>
                 </tr>
               </thead>
               <tbody id="clips-tbody">
@@ -613,6 +613,62 @@
           <button type="submit" class="btn-primary">Iniciar Pipeline</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Clip Details & Publication Modal -->
+  <div id="clip-details-modal" class="modal">
+    <div class="modal-content" style="max-width: 820px; width: 95%;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;">
+        <h3 id="modal-clip-title" style="font-size: 16px; font-weight: 800; color: #fff;">Detalles del Clip</h3>
+        <button onclick="closeClipDetailsModal()" style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">✕</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 260px 1fr; gap: 18px;">
+        <!-- Left: Short Video Player -->
+        <div>
+          <div style="border-radius: 12px; overflow: hidden; background: #000; border: 1px solid var(--card-border); aspect-ratio: 9/16; max-height: 440px; display: flex; align-items: center; justify-content: center;">
+            <video id="modal-video-player" controls style="width: 100%; height: 100%; object-fit: contain;"></video>
+          </div>
+        </div>
+
+        <!-- Right: Enriched Info -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Streamer & Juego</span>
+              <span id="modal-clip-score" class="viral-score">⭐ 7.5</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <strong id="modal-streamer-name" style="font-size: 14px; color: #fff;">Streamer</strong>
+              <span id="modal-stream-game" style="font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,0.15); padding: 2px 6px; border-radius: 4px;">Juego</span>
+              <a id="modal-source-link" href="#" target="_blank" style="font-size: 11px; color: #38bdf8; text-decoration: none; margin-left: auto;">🔗 Ver en Twitch</a>
+            </div>
+          </div>
+
+          <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px;">Transcripción del Audio</label>
+            <div id="modal-transcript-text" style="font-size: 12px; color: #e2e8f0; font-style: italic; max-height: 75px; overflow-y: auto; line-height: 1.4;">Sin audio reconocido</div>
+          </div>
+
+          <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px;">Descripción & Hashtags Virales</label>
+            <div id="modal-desc-tags" style="font-size: 11.5px; color: #cbd5e1; max-height: 70px; overflow-y: auto; line-height: 1.4;"></div>
+          </div>
+
+          <!-- Single Social Publishing Buttons -->
+          <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid var(--card-border);">
+            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;">Publicación Directa por Red:</span>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button id="btn-modal-pub-yt" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('youtube')">🔴 YouTube</button>
+              <button id="btn-modal-pub-tk" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('tiktok')">🎵 TikTok</button>
+              <button id="btn-modal-pub-ig" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('instagram')">📸 Instagram</button>
+              <button id="btn-modal-pub-all" class="btn-primary" style="font-size: 11px; padding: 5px 12px; margin-left: auto;" onclick="publishModalClip('all')">🚀 Publicar en Todas</button>
+            </div>
+            <div id="modal-pub-status" style="margin-top: 8px; font-size: 11px; color: var(--text-muted);"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -734,12 +790,28 @@
         const tk = document.getElementById('status-tk');
         const ig = document.getElementById('status-ig');
 
-        yt.innerText = data.youtube ? '🟢 Conectado' : '⚪ Desconectado';
-        tk.innerText = data.tiktok ? '🟢 Conectado' : '⚪ Desconectado';
-        ig.innerText = data.instagram ? '🟢 Conectado' : '⚪ Desconectado';
+        yt.innerHTML = data.youtube 
+          ? '🟢 Conectado' 
+          : '⚪ Desconectado <button onclick="connectSocial(\'youtube\')" style="padding: 2px 7px; font-size: 10px; margin-left: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; cursor: pointer;">Reconectar</button>';
+        tk.innerHTML = data.tiktok 
+          ? '🟢 Conectado' 
+          : '⚪ Desconectado <button onclick="connectSocial(\'tiktok\')" style="padding: 2px 7px; font-size: 10px; margin-left: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; cursor: pointer;">Login</button>';
+        ig.innerHTML = data.instagram 
+          ? '🟢 Conectado' 
+          : '⚪ Desconectado <button onclick="connectSocial(\'instagram\')" style="padding: 2px 7px; font-size: 10px; margin-left: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; cursor: pointer;">Login</button>';
       } catch (e) {
         console.error(e);
       }
+    }
+
+    async function connectSocial(platform) {
+      if (platform === 'youtube') {
+        alert('Abriendo ventana de inicio de sesión de Google en tu navegador. Por favor selecciona tu cuenta para vincular YouTube.');
+      } else {
+        alert(`Iniciando navegador para ${platform.toUpperCase()}. Inicia sesión en la ventana emergente.`);
+      }
+      await fetch(`/api/socials/login/${platform}`, { method: 'POST' });
+      setTimeout(loadSocialStatus, 4000);
     }
 
     async function loadCompilations() {
@@ -842,10 +914,95 @@
       loadCompilations();
     }
 
+    function getCategoryBadge(cat) {
+      const map = {
+        'funny': '😂 Humor',
+        'rage': '🤬 Rage',
+        'clutch': '🏆 Clutch',
+        'fail': '💀 Fail',
+        'story': '📖 Story',
+        'chat': '💬 Charla',
+        'general': '🎮 Gaming'
+      };
+      return map[cat] || cat || 'Gaming';
+    }
+
+    let activeModalClipId = null;
+
+    function openClipDetails(id) {
+      const clip = (window.currentClips || []).find(c => c.id === id);
+      if (!clip) return;
+      activeModalClipId = id;
+
+      document.getElementById('modal-clip-title').innerText = clip.ai_title || clip.original_title || ('Clip #' + clip.id);
+      document.getElementById('modal-streamer-name').innerText = clip.streamer_name || 'Desconocido';
+      document.getElementById('modal-stream-game').innerText = clip.stream_game || 'Variado';
+      document.getElementById('modal-clip-score').innerText = (clip.ai_score >= 8 ? '🔥 ' : '⭐ ') + (clip.ai_score ? clip.ai_score.toFixed(1) : '-');
+      
+      const srcLink = document.getElementById('modal-source-link');
+      if (clip.source_url) {
+        srcLink.href = clip.source_url;
+        srcLink.style.display = 'inline-block';
+        srcLink.innerText = `🔗 Ver en ${clip.source_platform ? clip.source_platform.toUpperCase() : 'Twitch'}`;
+      } else {
+        srcLink.style.display = 'none';
+      }
+
+      document.getElementById('modal-transcript-text').innerText = clip.transcript_text ? `"${clip.transcript_text}"` : 'Sin audio hablado discernible';
+
+      const descTags = document.getElementById('modal-desc-tags');
+      descTags.innerHTML = `
+        <div style="margin-bottom: 6px;"><strong>Descripción:</strong> ${clip.ai_description || 'Sin descripción'}</div>
+        <div style="color: #38bdf8;"><strong>Hashtags:</strong> ${clip.ai_hashtags || '#shorts #clips'}</div>
+      `;
+
+      const videoPlayer = document.getElementById('modal-video-player');
+      if (clip.processed_path_vertical) {
+        const filename = clip.processed_path_vertical.split(/[\\\\/]/).pop();
+        videoPlayer.src = `/storage/processed/${filename}`;
+      } else {
+        videoPlayer.removeAttribute('src');
+      }
+
+      document.getElementById('modal-pub-status').innerText = '';
+      document.getElementById('clip-details-modal').style.display = 'flex';
+    }
+
+    function closeClipDetailsModal() {
+      const videoPlayer = document.getElementById('modal-video-player');
+      videoPlayer.pause();
+      videoPlayer.removeAttribute('src');
+      document.getElementById('clip-details-modal').style.display = 'none';
+    }
+
+    async function publishModalClip(platform) {
+      if (!activeModalClipId) return;
+      const statusEl = document.getElementById('modal-pub-status');
+      statusEl.innerText = `Subiendo clip #${activeModalClipId} a ${platform.toUpperCase()}... Por favor espera.`;
+      statusEl.style.color = '#38bdf8';
+
+      try {
+        const url = platform === 'all' 
+          ? `/api/clips/${activeModalClipId}/publish` 
+          : `/api/clips/${activeModalClipId}/publish/${platform}`;
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        
+        statusEl.innerText = 'Resultado: ' + JSON.stringify(data);
+        const isOk = data.success || data.youtube?.success || data.socials?.tiktok?.success || data.socials?.instagram?.success;
+        statusEl.style.color = isOk ? '#10b981' : '#ef4444';
+        loadClips();
+      } catch (err) {
+        statusEl.innerText = 'Error: ' + err;
+        statusEl.style.color = '#ef4444';
+      }
+    }
+
     async function loadClips() {
       try {
         const res = await fetch('/api/clips');
         const clips = await res.json();
+        window.currentClips = clips;
         const tbody = document.getElementById('clips-tbody');
 
         if (!clips || clips.length === 0) {
@@ -854,7 +1011,7 @@
         }
 
         tbody.innerHTML = clips.map(c => {
-          const isGta6 = /gta\s*6|gta\s*vi|vice\s*city|grand\s*theft\s*auto/i.test((c.ai_title || '') + ' ' + (c.original_title || '') + ' ' + (c.ai_hashtags || ''));
+          const isGta6 = /gta\s*6|gta\s*vi|vice\s*city|grand\s*theft\s*auto/i.test((c.ai_title || '') + ' ' + (c.original_title || '') + ' ' + (c.ai_hashtags || '') + ' ' + (c.stream_game || ''));
           const isHighViral = (c.ai_score || 0) >= 8.0;
           return `
           <tr>
@@ -862,27 +1019,50 @@
               <input type="checkbox" class="clip-checkbox" data-clip-id="${c.id}" ${selectedClipIds.has(c.id) ? 'checked' : ''} onchange="toggleClipSelection(${c.id}, this)">
             </td>
             <td>
-              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px;">
-                <strong style="font-size: 14px;">${c.ai_title || c.original_title || 'Clip #' + c.id}</strong>
-                ${isGta6 ? '<span class="gta6-badge">🌴 GTA VI</span>' : ''}
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                  <span class="platform-tag platform-${c.source_platform}">${c.source_platform}</span>
+                  <strong style="font-size: 13px; color: #fff;">${c.streamer_name || 'Streamer'}</strong>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; font-weight: 500;">${c.stream_game || 'Variado'}</div>
+                <div style="font-size: 10px; color: #64748b;">${c.created_at || ''}</div>
               </div>
-              <small style="color: var(--text-muted);">${c.ai_category || 'general'} • ${(c.duration_seconds || 0).toFixed(0)}s</small>
             </td>
-            <td><span class="platform-tag platform-${c.source_platform}">${c.source_platform}</span></td>
             <td>
-              ${isHighViral
-                ? `<span class="viral-score" style="color: #4ade80; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.4); font-weight: 800;">🔥 ${c.ai_score.toFixed(1)}</span>`
-                : `<span class="viral-score">⭐ ${c.ai_score ? c.ai_score.toFixed(1) : '-'}</span>`
-              }
+              <div style="display: flex; flex-direction: column; gap: 3px;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <strong style="font-size: 13.5px; color: #f8fafc;">${c.ai_title || c.original_title || 'Clip #' + c.id}</strong>
+                  ${isGta6 ? '<span class="gta6-badge">🌴 GTA VI</span>' : ''}
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);">
+                  Original: <em>${c.original_title}</em> • ${(c.duration_seconds || 0).toFixed(0)}s
+                  ${c.source_url ? ` • <a href="${c.source_url}" target="_blank" style="color: #818cf8; text-decoration: none; font-weight: 600;">🔗 Ver Clip</a>` : ''}
+                </div>
+                ${c.transcript_text ? `
+                  <div style="font-size: 11px; color: #cbd5e1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; font-style: italic; max-width: 440px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${c.transcript_text.replace(/"/g, '&quot;')}">
+                    💬 "${c.transcript_text}"
+                  </div>` : ''}
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 3px;">
+                ${isHighViral
+                  ? `<span class="viral-score" style="color: #4ade80; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.4); font-weight: 800;">🔥 ${c.ai_score.toFixed(1)}</span>`
+                  : `<span class="viral-score">⭐ ${c.ai_score ? c.ai_score.toFixed(1) : '-'}</span>`
+                }
+                <span style="font-size: 10.5px; color: #a5b4fc; font-weight: 600;">${getCategoryBadge(c.ai_category)}</span>
+              </div>
             </td>
             <td><span class="status-pill status-${c.status}">${c.status}</span></td>
             <td>
-              ${c.processed_path_vertical ? `
-                <a href="/storage/processed/${c.processed_path_vertical.split(/[\\\\/]/).pop()}" target="_blank" class="btn-secondary" style="padding: 4px 10px; font-size: 11px; text-decoration: none;">Ver Short</a>
-                <button onclick="publishClip(${c.id})" class="btn-primary" style="padding: 4px 10px; font-size: 11px; margin-left: 6px;">Publicar</button>
-              ` : `
-                <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">Reintentar</button>
-              `}
+              <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                ${c.processed_path_vertical ? `
+                  <button onclick="openClipDetails(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px;">👁️ Ver / Redes</button>
+                  <button onclick="publishClip(${c.id})" class="btn-primary" style="padding: 4px 10px; font-size: 11px;">🚀 Publicar</button>
+                ` : `
+                  <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄 Reintentar</button>
+                `}
+              </div>
             </td>
           </tr>
         `}).join('');

@@ -201,7 +201,38 @@ def get_radar_status(db: Session = Depends(get_db)):
 # --- Clips Management APIs ---
 @app.get("/api/clips")
 def get_clips(db: Session = Depends(get_db)):
-    return db.query(ClipTask).order_by(ClipTask.id.desc()).limit(50).all()
+    clips = db.query(ClipTask).order_by(ClipTask.id.desc()).limit(50).all()
+    results = []
+    for c in clips:
+        ch = c.channel
+        logs = c.publish_logs or []
+        logs_summary = [
+            {"platform": l.target_platform, "status": l.status, "url": l.external_url}
+            for l in logs
+        ]
+        results.append({
+            "id": c.id,
+            "channel_id": c.channel_id,
+            "streamer_name": (ch.display_name or ch.channel_name) if ch else "Personalizado",
+            "streamer_username": ch.channel_name if ch else "",
+            "stream_game": (ch.stream_game if ch else "") or "",
+            "source_platform": c.source_platform or (ch.platform if ch else "twitch"),
+            "source_url": c.source_url,
+            "original_title": c.original_title or f"Clip #{c.id}",
+            "duration_seconds": c.duration_seconds or 0.0,
+            "transcript_text": c.transcript_text or "",
+            "ai_score": c.ai_score or 0.0,
+            "ai_category": c.ai_category or "general",
+            "ai_title": c.ai_title or c.original_title or f"Clip #{c.id}",
+            "ai_description": c.ai_description or "",
+            "ai_hashtags": c.ai_hashtags or "",
+            "processed_path_vertical": c.processed_path_vertical,
+            "status": c.status,
+            "error_message": c.error_message,
+            "created_at": c.created_at.strftime("%d/%m %H:%M") if c.created_at else "",
+            "publish_logs": logs_summary
+        })
+    return results
 
 @app.post("/api/clips/custom")
 async def add_custom_clip(payload: CustomClipCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -233,6 +264,41 @@ async def publish_clip(clip_id: int):
     res = await pipeline.auto_publish_clip(clip_id)
     return res
 
+@app.post("/api/clips/{clip_id}/publish/{platform}")
+async def publish_clip_single(clip_id: int, platform: str, db: Session = Depends(get_db)):
+    """Publishes a clip specifically to youtube, tiktok, or instagram."""
+    task = db.query(ClipTask).filter(ClipTask.id == clip_id).first()
+    if not task or not task.processed_path_vertical:
+        raise HTTPException(status_code=400, detail="Clip not ready or not found")
+
+    title = task.ai_title or task.original_title or "Momento Épico"
+    desc = f"{task.ai_description or ''}\n\n{task.ai_hashtags or ''}".strip()
+    file_path = task.processed_path_vertical
+
+    from app.publishers.browser_uploader import browser_uploader
+    from app.models import PublishLog
+
+    res = {}
+    if platform == "youtube":
+        res = await pipeline.yt_publisher.upload_video(file_path=file_path, title=title, description=desc, is_short=True)
+        log = PublishLog(clip_id=task.id, target_platform="youtube_shorts", status="SUCCESS" if res.get("success") else "FAILED", external_url=res.get("url"), error_detail=res.get("error"))
+        db.add(log)
+    elif platform == "tiktok":
+        res = await browser_uploader.upload_tiktok_reel(video_path=file_path, caption=f"{title}\n{task.ai_hashtags or ''}")
+        log = PublishLog(clip_id=task.id, target_platform="tiktok", status="SUCCESS" if res.get("success") else "FAILED", error_detail=res.get("error"))
+        db.add(log)
+    elif platform == "instagram":
+        res = await browser_uploader.upload_instagram_reel(video_path=file_path, caption=f"{title}\n\n{desc}")
+        log = PublishLog(clip_id=task.id, target_platform="instagram_reels", status="SUCCESS" if res.get("success") else "FAILED", error_detail=res.get("error"))
+        db.add(log)
+    else:
+        raise HTTPException(status_code=400, detail="Plataforma inválida. Usa: youtube, tiktok o instagram")
+
+    if res.get("success"):
+        task.status = "PUBLISHED"
+    db.commit()
+    return res
+
 # --- Long-form Compilation API ---
 @app.post("/api/compilations")
 async def create_compilation(payload: CompilationCreate):
@@ -254,18 +320,30 @@ async def publish_compilation(compilation_id: int):
 @app.get("/api/socials/status")
 def get_socials_status():
     from app.publishers.browser_uploader import browser_uploader
+    yt_connected = False
+    if settings.YOUTUBE_TOKEN_FILE.exists():
+        try:
+            from google.oauth2.credentials import Credentials
+            creds = Credentials.from_authorized_user_file(str(settings.YOUTUBE_TOKEN_FILE))
+            yt_connected = bool(creds and not creds.expired)
+        except Exception:
+            yt_connected = False
     return {
-        "youtube": settings.YOUTUBE_TOKEN_FILE.exists(),
+        "youtube": yt_connected,
         "tiktok": browser_uploader.is_logged_in("tiktok"),
         "instagram": browser_uploader.is_logged_in("instagram")
     }
 
 @app.post("/api/socials/login/{platform}")
 async def trigger_social_login(platform: str, background_tasks: BackgroundTasks):
+    if platform == "youtube":
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, pipeline.yt_publisher.start_oauth_flow)
     if platform not in ["tiktok", "instagram"]:
         raise HTTPException(status_code=400, detail="Invalid platform")
     from app.publishers.browser_uploader import browser_uploader
     background_tasks.add_task(browser_uploader.launch_login_session, platform)
+    return {"message": f"Iniciando navegador para autenticar en {platform}..."}
 class CookiePayload(BaseModel):
     platform: str
     session_id: str

@@ -266,25 +266,44 @@ class BrowserUploader:
 
                 # Step through modals: Siguiente -> Siguiente -> Caption -> Compartir
                 await asyncio.sleep(4)
-                next_btn = page.locator('div[role="button"]:has-text("Siguiente"), button:has-text("Next"), div:has-text("Siguiente")').first
+                next_btn = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Siguiente"), button:has-text("Siguiente"), div[role="button"]:has-text("Next"), button:has-text("Next")').last
                 if await next_btn.count() > 0:
-                    await next_btn.click(force=True, timeout=10000)
-                    await asyncio.sleep(2)
+                    try:
+                        await next_btn.click(force=True, timeout=5000)
+                    except Exception:
+                        await next_btn.evaluate("el => el.click()")
+                    await asyncio.sleep(3)
 
-                next_btn2 = page.locator('div[role="button"]:has-text("Siguiente"), button:has-text("Next"), div:has-text("Siguiente")').first
+                next_btn2 = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Siguiente"), button:has-text("Siguiente"), div[role="button"]:has-text("Next"), button:has-text("Next")').last
                 if await next_btn2.count() > 0:
-                    await next_btn2.click(force=True, timeout=10000)
-                    await asyncio.sleep(2)
+                    try:
+                        await next_btn2.click(force=True, timeout=5000)
+                    except Exception:
+                        await next_btn2.evaluate("el => el.click()")
+                    await asyncio.sleep(3)
 
-                caption_area = page.locator('div[aria-label="Escribe un pie de foto..."], textarea').first
+                caption_area = page.locator('div[aria-label="Escribe un pie de foto..."], div[role="textbox"], textarea').first
                 if await caption_area.count() > 0:
-                    await caption_area.fill(caption[:300])
+                    try:
+                        await caption_area.fill(caption[:300])
+                    except Exception:
+                        await caption_area.click(force=True)
+                        await page.keyboard.type(caption[:300])
 
-                share_btn = page.locator('div[role="button"]:has-text("Compartir"), button:has-text("Share"), div:has-text("Compartir")').first
+                await asyncio.sleep(2)
+                # Specific button inside dialog header to avoid root mount div
+                share_btn = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Compartir"), button:has-text("Compartir"), div[role="button"]:has-text("Share"), button:has-text("Share")').last
+                if await share_btn.count() == 0:
+                    share_btn = page.locator('div[role="button"]:has-text("Compartir"), button:has-text("Compartir"), div[role="button"]:has-text("Share"), button:has-text("Share")').last
+
                 if await share_btn.count() > 0:
-                    await share_btn.click(force=True, timeout=15000)
+                    try:
+                        await share_btn.scroll_into_view_if_needed(timeout=3000)
+                        await share_btn.click(force=True, timeout=10000)
+                    except Exception:
+                        await share_btn.evaluate("el => el.click()")
                     logger.info("Instagram share clicked!")
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(12)
 
                 await browser.close()
                 return {"success": True, "platform": "instagram", "message": "Reel shared successfully on Instagram"}
