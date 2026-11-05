@@ -342,6 +342,93 @@
       max-width: 500px;
       width: 90%;
     }
+
+    /* GTA 6 Radar & Auto-Pilot Styles */
+    .radar-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(255, 0, 128, 0.15), rgba(0, 242, 254, 0.15));
+      border: 1px solid rgba(255, 0, 128, 0.4);
+      color: #ff3399;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 15px rgba(255, 0, 128, 0.25);
+    }
+
+    .radar-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00f2fe;
+      box-shadow: 0 0 10px #00f2fe;
+      animation: radar-pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes radar-pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 14px #ff007f; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .toggle-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      transition: all 0.3s ease;
+      border: 1px solid var(--card-border);
+    }
+
+    .toggle-switch.active {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .toggle-handle {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .toggle-switch.active .toggle-handle {
+      transform: translateX(20px);
+    }
+
+    .gta6-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: linear-gradient(135deg, #ff007f, #00f2fe);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 9.5px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 10px rgba(255, 0, 128, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -351,27 +438,46 @@
         <div class="logo-badge">⚡</div>
         <div>
           <h1>Stream Auto Clipper AI</h1>
-          <p class="subtitle">Detección de directos • Recorte 9:16 FaceCam • Subtítulos Dinámicos • Publicación Automática</p>
+          <p class="subtitle">Detección de directos • Recorte 9:16 FaceCam • Subtítulos Dinámicos Vice City • Publicación Automática</p>
         </div>
       </div>
       <div class="header-actions">
+        <div class="radar-badge" id="gta6-radar-pill">
+          <span class="radar-dot"></span>
+          <span>🌴 GTA VI RADAR:</span>
+          <span id="radar-text" style="color: #00f2fe;">STANDBY</span>
+        </div>
+        <button class="btn-secondary" style="background: linear-gradient(135deg, rgba(255,0,128,0.18), rgba(99,102,241,0.18)); border: 1px solid rgba(255,0,128,0.4); color: #ff99dd;" onclick="seedGta6Streamers()">
+          🎮 Roster GTA 6 (1-Click)
+        </button>
         <button class="btn-secondary" onclick="scanChannels()">🔄 Escanear Ahora</button>
         <button class="btn-primary" onclick="openTestClipModal()">✨ Probar con un Clip URL</button>
       </div>
     </header>
 
-    <!-- Social Accounts Status Bar -->
-    <div style="display: flex; gap: 14px; margin-bottom: 24px; padding: 14px 20px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; align-items: center; flex-wrap: wrap;">
-      <span style="font-weight: 700; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cuentas Vinculadas:</span>
-      <span id="badge-yt" class="platform-tag" style="background: rgba(255, 0, 0, 0.15); border: 1px solid rgba(255, 0, 0, 0.4); color: #ff4d4d; font-size: 13px; padding: 6px 14px;">
-        🔴 YouTube: <strong id="status-yt">Cargando...</strong>
-      </span>
-      <span id="badge-tk" class="platform-tag" style="background: rgba(0, 242, 234, 0.15); border: 1px solid rgba(0, 242, 234, 0.4); color: #00f2fe; font-size: 13px; padding: 6px 14px;">
-        🎵 TikTok: <strong id="status-tk">Cargando...</strong>
-      </span>
-      <span id="badge-ig" class="platform-tag" style="background: rgba(225, 48, 108, 0.15); border: 1px solid rgba(225, 48, 108, 0.4); color: #ff4da6; font-size: 13px; padding: 6px 14px;">
-        📸 Instagram Reels: <strong id="status-ig">Cargando...</strong>
-      </span>
+    <!-- Social Accounts Status Bar & Auto-Pilot Switch -->
+    <div style="display: flex; gap: 16px; margin-bottom: 24px; padding: 14px 20px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <span style="font-weight: 700; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cuentas:</span>
+        <span id="badge-yt" class="platform-tag" style="background: rgba(255, 0, 0, 0.15); border: 1px solid rgba(255, 0, 0, 0.4); color: #ff4d4d; font-size: 13px; padding: 6px 14px;">
+          🔴 YouTube: <strong id="status-yt">Cargando...</strong>
+        </span>
+        <span id="badge-tk" class="platform-tag" style="background: rgba(0, 242, 234, 0.15); border: 1px solid rgba(0, 242, 234, 0.4); color: #00f2fe; font-size: 13px; padding: 6px 14px;">
+          🎵 TikTok: <strong id="status-tk">Cargando...</strong>
+        </span>
+        <span id="badge-ig" class="platform-tag" style="background: rgba(225, 48, 108, 0.15); border: 1px solid rgba(225, 48, 108, 0.4); color: #ff4da6; font-size: 13px; padding: 6px 14px;">
+          📸 Instagram Reels: <strong id="status-ig">Cargando...</strong>
+        </span>
+      </div>
+
+      <!-- Auto-Pilot Toggle -->
+      <div class="toggle-container" onclick="toggleAutoPilot()" title="Publica clips automáticamente a YouTube Shorts, TikTok e Instagram cuando el Score viral sea >= 8.0">
+        <span>🚀 Auto-Pilot (Score ≥ 8.0):</span>
+        <div id="autopilot-toggle" class="toggle-switch">
+          <div class="toggle-handle"></div>
+        </div>
+        <span id="autopilot-label" style="font-size: 12px; color: var(--text-muted); font-weight: 800;">OFF</span>
+      </div>
     </div>
 
     <div class="dashboard-grid">
@@ -511,6 +617,77 @@
   </div>
 
   <script>
+    let autoPilotActive = false;
+
+    async function loadAutoPilotSettings() {
+      try {
+        const res = await fetch('/api/settings/autopilot');
+        const data = await res.json();
+        autoPilotActive = !!data.auto_publish;
+        updateAutoPilotUI();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleAutoPilot() {
+      autoPilotActive = !autoPilotActive;
+      updateAutoPilotUI();
+      try {
+        await fetch('/api/settings/autopilot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ auto_publish: autoPilotActive, min_score: 8.0 })
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function updateAutoPilotUI() {
+      const toggle = document.getElementById('autopilot-toggle');
+      const label = document.getElementById('autopilot-label');
+      if (autoPilotActive) {
+        toggle.classList.add('active');
+        label.innerText = 'ACTIVO (≥ 8.0)';
+        label.style.color = '#10b981';
+      } else {
+        toggle.classList.remove('active');
+        label.innerText = 'OFF';
+        label.style.color = 'var(--text-muted)';
+      }
+    }
+
+    async function loadRadarStatus() {
+      try {
+        const res = await fetch('/api/radar/status');
+        const data = await res.json();
+        const radarText = document.getElementById('radar-text');
+        if (data.is_active) {
+          radarText.innerText = `¡TURBO EN VIVO (${data.gta6_live.join(', ')})! 🔥`;
+          radarText.style.color = '#ff007f';
+        } else {
+          radarText.innerText = 'VIGILANDO DIRECTOS 🌴';
+          radarText.style.color = '#00f2fe';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function seedGta6Streamers() {
+      if (!confirm('¿Agregar automáticamente el roster oficial de top streamers para el lanzamiento de GTA 6 (AuronPlay, Ibai, IlloJuan, Rubius, ElXokas, TheGrefg, Spreen, Rivers, WestCOL, xQc...)?')) return;
+      try {
+        const res = await fetch('/api/channels/seed-gta6', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Streamers añadidos y monitoreo iniciado.');
+        await loadChannels();
+        await loadRadarStatus();
+      } catch (e) {
+        alert('Error al añadir streamers: ' + e);
+      }
+    }
+
     async function loadChannels() {
       try {
         const res = await fetch('/api/channels');
@@ -523,12 +700,15 @@
           return;
         }
 
-        container.innerHTML = data.map(ch => `
+        container.innerHTML = data.map(ch => {
+          const isGta6 = /gta\s*6|gta\s*vi|grand\s*theft\s*auto|vice\s*city/i.test((ch.stream_game || '') + ' ' + (ch.stream_title || ''));
+          return `
           <div class="channel-item">
             <div class="channel-info">
               <span class="platform-tag platform-${ch.platform}">${ch.platform}</span>
               <div>
-                <strong style="font-size: 14px;">${ch.channel_name}</strong>
+                <strong style="font-size: 14px;">${ch.display_name || ch.channel_name}</strong>
+                ${isGta6 ? '<span class="gta6-badge" style="margin-left: 6px;">🌴 GTA VI</span>' : ''}
                 <div style="font-size: 11px; color: var(--text-muted);">${ch.stream_game || 'Variado'}</div>
               </div>
             </div>
@@ -539,7 +719,7 @@
               <button onclick="deleteChannel(${ch.id})" style="background: none; border: none; color: #ef4444; margin-left: 8px; cursor: pointer;">✕</button>
             </div>
           </div>
-        `).join('');
+        `}).join('');
       } catch (e) {
         console.error(e);
       }
@@ -673,17 +853,28 @@
           return;
         }
 
-        tbody.innerHTML = clips.map(c => `
+        tbody.innerHTML = clips.map(c => {
+          const isGta6 = /gta\s*6|gta\s*vi|vice\s*city|grand\s*theft\s*auto/i.test((c.ai_title || '') + ' ' + (c.original_title || '') + ' ' + (c.ai_hashtags || ''));
+          const isHighViral = (c.ai_score || 0) >= 8.0;
+          return `
           <tr>
             <td>
               <input type="checkbox" class="clip-checkbox" data-clip-id="${c.id}" ${selectedClipIds.has(c.id) ? 'checked' : ''} onchange="toggleClipSelection(${c.id}, this)">
             </td>
             <td>
-              <strong style="display:block; font-size: 14px;">${c.ai_title || c.original_title || 'Clip #' + c.id}</strong>
-              <small style="color: var(--text-muted);">${c.ai_category || 'general'} • ${c.duration_seconds.toFixed(0)}s</small>
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px;">
+                <strong style="font-size: 14px;">${c.ai_title || c.original_title || 'Clip #' + c.id}</strong>
+                ${isGta6 ? '<span class="gta6-badge">🌴 GTA VI</span>' : ''}
+              </div>
+              <small style="color: var(--text-muted);">${c.ai_category || 'general'} • ${(c.duration_seconds || 0).toFixed(0)}s</small>
             </td>
             <td><span class="platform-tag platform-${c.source_platform}">${c.source_platform}</span></td>
-            <td><span class="viral-score">⭐ ${c.ai_score ? c.ai_score.toFixed(1) : '-'}</span></td>
+            <td>
+              ${isHighViral
+                ? `<span class="viral-score" style="color: #4ade80; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.4); font-weight: 800;">🔥 ${c.ai_score.toFixed(1)}</span>`
+                : `<span class="viral-score">⭐ ${c.ai_score ? c.ai_score.toFixed(1) : '-'}</span>`
+              }
+            </td>
             <td><span class="status-pill status-${c.status}">${c.status}</span></td>
             <td>
               ${c.processed_path_vertical ? `
@@ -694,7 +885,7 @@
               `}
             </td>
           </tr>
-        `).join('');
+        `}).join('');
       } catch (e) {
         console.error(e);
       }
@@ -769,11 +960,15 @@
 
     // Auto-refresh every 15 seconds
     loadSocialStatus();
+    loadAutoPilotSettings();
+    loadRadarStatus();
     loadChannels();
     loadClips();
     loadCompilations();
     setInterval(() => {
       loadSocialStatus();
+      loadAutoPilotSettings();
+      loadRadarStatus();
       loadChannels();
       loadClips();
       loadCompilations();

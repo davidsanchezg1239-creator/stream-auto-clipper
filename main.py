@@ -68,6 +68,10 @@ class ChannelCreate(BaseModel):
     platform: str
     channel_name: str
 
+class AutoPilotPayload(BaseModel):
+    auto_publish: bool
+    min_score: Optional[float] = 8.0
+
 class CustomClipCreate(BaseModel):
     clip_url: str
     channel_id: Optional[int] = None
@@ -121,6 +125,78 @@ def delete_channel(channel_id: int, db: Session = Depends(get_db)):
 async def trigger_scan(background_tasks: BackgroundTasks):
     background_tasks.add_task(pipeline.scan_all_channels)
     return {"message": "Scan triggered"}
+
+# --- GTA 6 Radar & Pre-seeded Streamers ---
+GTA6_PRESET_STREAMERS = [
+    {"platform": "twitch", "channel_name": "auronplay", "display_name": "AuronPlay"},
+    {"platform": "twitch", "channel_name": "ibai", "display_name": "Ibai Llanos"},
+    {"platform": "twitch", "channel_name": "illojuan", "display_name": "IlloJuan"},
+    {"platform": "twitch", "channel_name": "rubius", "display_name": "Rubius"},
+    {"platform": "twitch", "channel_name": "elxokas", "display_name": "ElXokas"},
+    {"platform": "twitch", "channel_name": "thegrefg", "display_name": "TheGrefg"},
+    {"platform": "twitch", "channel_name": "spreen", "display_name": "Spreen"},
+    {"platform": "twitch", "channel_name": "rivers_gg", "display_name": "Rivers GG"},
+    {"platform": "twitch", "channel_name": "juansguarnizo", "display_name": "JuanSGuarnizo"},
+    {"platform": "twitch", "channel_name": "alexby11", "display_name": "Alexby11"},
+    {"platform": "kick", "channel_name": "westcol", "display_name": "WestCOL"},
+    {"platform": "kick", "channel_name": "xqc", "display_name": "xQc"},
+    {"platform": "kick", "channel_name": "adinross", "display_name": "Adin Ross"},
+]
+
+@app.post("/api/channels/seed-gta6")
+async def seed_gta6_channels(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Pre-seeds top-tier Spanish and global streamers for GTA 6 launch day."""
+    added = []
+    for s in GTA6_PRESET_STREAMERS:
+        existing = db.query(Channel).filter(
+            Channel.channel_name == s["channel_name"],
+            Channel.platform == s["platform"]
+        ).first()
+        if not existing:
+            ch = Channel(
+                platform=s["platform"],
+                channel_name=s["channel_name"],
+                display_name=s["display_name"]
+            )
+            db.add(ch)
+            added.append(s["channel_name"])
+    db.commit()
+    background_tasks.add_task(pipeline.scan_all_channels)
+    return {"message": f"Se agregaron {len(added)} streamers para el estreno de GTA 6.", "added": added}
+
+@app.get("/api/settings/autopilot")
+def get_autopilot_settings():
+    return {
+        "auto_publish": settings.AUTO_PUBLISH_VIRAL,
+        "min_score": settings.AUTO_PUBLISH_MIN_SCORE,
+        "gta6_turbo": settings.GTA6_TURBO_ENABLED
+    }
+
+@app.post("/api/settings/autopilot")
+def update_autopilot_settings(payload: AutoPilotPayload):
+    settings.AUTO_PUBLISH_VIRAL = payload.auto_publish
+    if payload.min_score is not None:
+        settings.AUTO_PUBLISH_MIN_SCORE = payload.min_score
+    logger.info(f"Auto-Pilot setting changed: enabled={settings.AUTO_PUBLISH_VIRAL}, min_score={settings.AUTO_PUBLISH_MIN_SCORE}")
+    return {
+        "message": "Configuración de Auto-Pilot actualizada",
+        "auto_publish": settings.AUTO_PUBLISH_VIRAL,
+        "min_score": settings.AUTO_PUBLISH_MIN_SCORE
+    }
+
+@app.get("/api/radar/status")
+def get_radar_status(db: Session = Depends(get_db)):
+    channels = db.query(Channel).all()
+    gta6_live = [
+        c.channel_name for c in channels
+        if c.is_live and pipeline.analyzer.is_gta6_content(c.stream_game or "", c.stream_title or "", "")
+    ]
+    return {
+        "turbo_enabled": settings.GTA6_TURBO_ENABLED,
+        "gta6_live": gta6_live,
+        "is_active": len(gta6_live) > 0,
+        "total_monitored": len(channels)
+    }
 
 # --- Clips Management APIs ---
 @app.get("/api/clips")

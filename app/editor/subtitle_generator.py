@@ -21,12 +21,25 @@ class SubtitleGenerator:
             centisecs = 99
         return f"{hrs}:{mins:02d}:{secs:02d}.{centisecs:02d}"
 
-    def generate_ass(self, segments: List[Dict[str, Any]], output_path: str) -> str:
+    def generate_ass(self, segments: List[Dict[str, Any]], output_path: str, style: str = "default") -> str:
         """
         Generates an .ass subtitle file with word-level animated highlighting.
+        Supports styles:
+        - "default": Classic TikTok white text with yellow active word highlight.
+        - "vice_city": GTA 6 / Vice City neon aesthetic (Neon Cyan / Crisp White with Hot Pink highlight).
         """
+        is_vc = (style == "vice_city")
+        font_size = self.font_size + (4 if is_vc else 0)
+        outline_size = 6 if is_vc else 5
+        margin_v = 640 if is_vc else 620
+        
+        # ASS Color format: &HAABBGGRR
+        primary_color = "&H00FFFFFF"  # White
+        active_color = r"{\c&H00E812FF\b1}" if is_vc else r"{\c&H0000FFFF\b1}"  # Vice City Neon Pink or Yellow
+        reset_color = r"{\c&H00FFFFFF\b1}"
+
         header = f"""[Script Info]
-Title: TikTok Viral Subtitles
+Title: TikTok Viral Subtitles - {"Vice City Edition" if is_vc else "Standard"}
 ScriptType: v4.00+
 WrapStyle: 0
 ScaledBorderAndShadow: yes
@@ -35,7 +48,7 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{self.font_name},{self.font_size},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,3,2,40,40,620,1
+Style: Default,{self.font_name},{font_size},{primary_color},&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,{outline_size},3,2,40,40,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -63,18 +76,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 chunk_start = chunk[0]["start"]
                 chunk_end = chunk[-1]["end"]
 
-                # For each word in the chunk, produce a timed dialogue line with that word highlighted in yellow
+                # For each word in the chunk, produce a timed dialogue line with that word highlighted
                 for w_idx, current_w in enumerate(chunk):
                     w_start = self._seconds_to_ass_time(current_w["start"])
                     w_end = self._seconds_to_ass_time(current_w["end"])
 
-                    # Build text where current word is highlighted in vibrant yellow (&H0000FFFF)
                     text_parts = []
                     for idx, w in enumerate(chunk):
                         word_str = w["word"].upper()
                         if idx == w_idx:
                             # Highlighted active word
-                            text_parts.append(r"{\c&H0000FFFF\b1}" + word_str + r"{\c&H00FFFFFF\b1}")
+                            text_parts.append(f"{active_color}{word_str}{reset_color}")
                         else:
                             # Regular white text
                             text_parts.append(word_str)

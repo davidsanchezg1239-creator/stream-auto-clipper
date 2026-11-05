@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # Polling frequency in seconds
     CHECK_INTERVAL_SECONDS: int = 60
 
+    # Auto-Pilot & GTA 6 Turbo Radar Settings
+    AUTO_PUBLISH_VIRAL: bool = False
+    AUTO_PUBLISH_MIN_SCORE: float = 8.0
+    GTA6_TURBO_ENABLED: bool = True
+    GTA6_TURBO_INTERVAL_SECONDS: int = 20
+
     class Config:
         env_file = str(BASE_DIR / ".env")
         env_file_encoding = "utf-8"
