@@ -281,7 +281,36 @@ class ClipperPipeline:
                 hashtags=task.ai_hashtags
             )
 
-            task.status = "PUBLISHED"
+            # Record Instagram log
+            ig_res = soc_res.get("instagram", {})
+            if ig_res and ig_res.get("status") != "skipped":
+                log_ig = PublishLog(
+                    clip_id=task.id,
+                    target_platform="instagram_reels",
+                    status="SUCCESS" if ig_res.get("success") else "FAILED",
+                    error_detail=ig_res.get("error")
+                )
+                db.add(log_ig)
+
+            # Record TikTok log
+            tk_res = soc_res.get("tiktok", {})
+            if tk_res and tk_res.get("status") != "skipped":
+                log_tk = PublishLog(
+                    clip_id=task.id,
+                    target_platform="tiktok",
+                    status="SUCCESS" if tk_res.get("success") else "FAILED",
+                    error_detail=tk_res.get("error")
+                )
+                db.add(log_tk)
+
+            # If at least one platform succeeded, mark clip as PUBLISHED
+            any_success = (
+                yt_res.get("success")
+                or ig_res.get("success")
+                or tk_res.get("success")
+            )
+            if any_success:
+                task.status = "PUBLISHED"
             db.commit()
             return {"youtube": yt_res, "socials": soc_res}
         finally:

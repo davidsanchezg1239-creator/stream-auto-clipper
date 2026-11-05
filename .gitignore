@@ -45,6 +45,7 @@ data/*.sqlite3
 storage/downloads/*
 storage/processed/*
 storage/compilations/*
+storage/*.png
 !storage/downloads/.gitkeep
 !storage/processed/.gitkeep
 !storage/compilations/.gitkeep

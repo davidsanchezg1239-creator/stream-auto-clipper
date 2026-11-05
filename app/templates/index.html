@@ -975,11 +975,32 @@
       document.getElementById('clip-details-modal').style.display = 'none';
     }
 
+    function renderPublishBadges(logs) {
+      if (!logs || logs.length === 0) return '';
+      let badges = [];
+      logs.forEach(l => {
+        if (l.platform === 'youtube_shorts' && l.status === 'SUCCESS') {
+          badges.push('<span title="Publicado en YouTube Shorts" style="font-size:12px; cursor:help;">🔴 YT</span>');
+        }
+        if (l.platform === 'tiktok' && l.status === 'SUCCESS') {
+          badges.push('<span title="Publicado en TikTok" style="font-size:12px; cursor:help;">🎵 TK</span>');
+        }
+        if (l.platform === 'instagram_reels' && l.status === 'SUCCESS') {
+          badges.push('<span title="Publicado en Instagram Reels" style="font-size:12px; cursor:help;">📸 IG</span>');
+        }
+      });
+      return badges.length > 0 ? `<div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">${badges.join('')}</div>` : '';
+    }
+
     async function publishModalClip(platform) {
       if (!activeModalClipId) return;
       const statusEl = document.getElementById('modal-pub-status');
-      statusEl.innerText = `Subiendo clip #${activeModalClipId} a ${platform.toUpperCase()}... Por favor espera.`;
+      const targetName = platform === 'all' ? 'todas las redes' : platform.toUpperCase();
+      statusEl.innerText = `⏳ Subiendo clip #${activeModalClipId} a ${targetName}... Por favor espera (hasta 45s).`;
       statusEl.style.color = '#38bdf8';
+
+      const modalButtons = document.querySelectorAll('#clip-details-modal button');
+      modalButtons.forEach(b => b.disabled = true);
 
       try {
         const url = platform === 'all' 
@@ -988,13 +1009,38 @@
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
         
-        statusEl.innerText = 'Resultado: ' + JSON.stringify(data);
+        let msg = '';
+        if (platform === 'all') {
+          let parts = [];
+          if (data.youtube?.success) parts.push('✅ YouTube Shorts');
+          else if (data.youtube) parts.push('⚠️ YouTube: ' + (data.youtube.error || 'Reconectar'));
+          
+          const tk = data.socials?.tiktok;
+          if (tk?.success) parts.push('✅ TikTok');
+          else if (tk) parts.push('❌ TikTok: ' + (tk.error || 'Error'));
+
+          const ig = data.socials?.instagram;
+          if (ig?.success) parts.push('✅ Instagram');
+          else if (ig) parts.push('❌ Instagram: ' + (ig.error || 'Error'));
+
+          msg = parts.join('\n');
+        } else {
+          if (data.success) {
+            msg = `✅ ¡Publicado exitosamente en ${targetName}!`;
+          } else {
+            msg = `❌ Error en ${targetName}: ${data.error || 'Error en la subida'}`;
+          }
+        }
+        
+        statusEl.innerText = msg;
         const isOk = data.success || data.youtube?.success || data.socials?.tiktok?.success || data.socials?.instagram?.success;
         statusEl.style.color = isOk ? '#10b981' : '#ef4444';
-        loadClips();
+        await loadClips();
       } catch (err) {
         statusEl.innerText = 'Error: ' + err;
         statusEl.style.color = '#ef4444';
+      } finally {
+        modalButtons.forEach(b => b.disabled = false);
       }
     }
 
@@ -1053,12 +1099,15 @@
                 <span style="font-size: 10.5px; color: #a5b4fc; font-weight: 600;">${getCategoryBadge(c.ai_category)}</span>
               </div>
             </td>
-            <td><span class="status-pill status-${c.status}">${c.status}</span></td>
+            <td>
+              <span class="status-pill status-${c.status}">${c.status}</span>
+              ${renderPublishBadges(c.publish_logs)}
+            </td>
             <td>
               <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                 ${c.processed_path_vertical ? `
                   <button onclick="openClipDetails(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px;">👁️ Ver / Redes</button>
-                  <button onclick="publishClip(${c.id})" class="btn-primary" style="padding: 4px 10px; font-size: 11px;">🚀 Publicar</button>
+                  <button onclick="publishClip(${c.id}, this)" class="btn-primary" style="padding: 4px 10px; font-size: 11px;">🚀 Publicar</button>
                 ` : `
                   <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄 Reintentar</button>
                 `}
@@ -1125,12 +1174,57 @@
       loadClips();
     }
 
-    async function publishClip(id) {
-      if (!confirm(`¿Publicar Short #${id} a redes sociales (YouTube Shorts, TikTok e Instagram)?`)) return;
-      const res = await fetch(`/api/clips/${id}/publish`, { method: 'POST' });
-      const data = await res.json();
-      alert(JSON.stringify(data, null, 2));
-      loadClips();
+    async function publishClip(id, btnElement) {
+      if (!confirm(`¿Publicar Short #${id} a redes sociales (YouTube Shorts, TikTok e Instagram Reels)?`)) return;
+      const btn = btnElement || (window.event && window.event.target);
+      const originalText = btn ? btn.innerHTML : '🚀 Publicar';
+      if (btn) {
+        btn.innerHTML = '⏳ Subiendo (0-45s)...';
+        btn.disabled = true;
+      }
+
+      try {
+        const res = await fetch(`/api/clips/${id}/publish`, { method: 'POST' });
+        const data = await res.json();
+
+        let msg = `📱 Resultado de Publicación (Clip #${id}):\n\n`;
+
+        // YouTube
+        if (data.youtube) {
+          if (data.youtube.success) {
+            msg += `✅ YouTube Shorts: ¡Publicado con éxito!\n`;
+          } else {
+            msg += `⚠️ YouTube Shorts: No publicado (${data.youtube.error || 'Requiere reconectar cuenta'})\n`;
+          }
+        }
+
+        // Socials (TikTok & Instagram)
+        const socials = data.socials || {};
+        if (socials.tiktok) {
+          if (socials.tiktok.success) {
+            msg += `✅ TikTok: ¡Publicado con éxito!\n`;
+          } else {
+            msg += `❌ TikTok: ${socials.tiktok.error || 'Error'}\n`;
+          }
+        }
+        if (socials.instagram) {
+          if (socials.instagram.success) {
+            msg += `✅ Instagram Reels: ¡Publicado con éxito!\n`;
+          } else {
+            msg += `❌ Instagram: ${socials.instagram.error || 'Error'}\n`;
+          }
+        }
+
+        alert(msg);
+        await loadClips();
+      } catch (err) {
+        alert('Error en la solicitud: ' + err);
+      } finally {
+        if (btn) {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      }
     }
 
     async function reprocessClip(id) {

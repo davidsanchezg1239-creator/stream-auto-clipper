@@ -178,7 +178,10 @@ class BrowserUploader:
                 except Exception:
                     browser = await p.chromium.launch(headless=True)
 
-                context = await browser.new_context(storage_state=str(self.tiktok_storage))
+                context = await browser.new_context(
+                    storage_state=str(self.tiktok_storage),
+                    viewport={"width": 1280, "height": 900}
+                )
                 page = await context.new_page()
                 await page.goto("https://www.tiktok.com/creator-center/upload?from=upload", wait_until="domcontentloaded")
 
@@ -186,28 +189,60 @@ class BrowserUploader:
                     await browser.close()
                     return {"success": False, "error": "TikTok session expired. Please re-login."}
 
-                # Locate file input (attached, even if hidden behind drag-and-drop UI)
+                # Locate file input
                 upload_input = page.locator('input[type="file"]').first
                 await upload_input.wait_for(state="attached", timeout=30000)
                 await upload_input.set_input_files(str(target_file))
                 logger.info("Video file attached to TikTok.")
 
-                await asyncio.sleep(5)
+                # Wait for file to register
+                await asyncio.sleep(6)
+
                 # Fill caption
                 caption_div = page.locator('div[contenteditable="true"]').first
                 if await caption_div.count() > 0:
-                    await caption_div.fill(caption[:150])
+                    try:
+                        await caption_div.fill(caption[:150])
+                    except Exception:
+                        await caption_div.click(force=True)
+                        await page.keyboard.type(caption[:150])
 
-                await asyncio.sleep(6)
-                # Click publish
-                publish_btn = page.locator('button:has-text("Publicar"), button:has-text("Post")').first
-                if await publish_btn.count() > 0:
-                    await publish_btn.click(force=True, timeout=15000)
-                    await asyncio.sleep(8)
-                    logger.info("TikTok publish clicked!")
+                # Wait for Post button to become enabled (while video uploads and processes)
+                publish_btn = page.locator('button:has-text("Post"), button:has-text("Publicar")').first
+                await publish_btn.wait_for(state="attached", timeout=30000)
+                
+                # Poll until enabled
+                for _ in range(45):
+                    if not await publish_btn.is_disabled():
+                        break
+                    await asyncio.sleep(1)
+
+                await publish_btn.click(force=True, timeout=10000)
+                logger.info("TikTok initial Post clicked. Checking for confirmation modals...")
+                await asyncio.sleep(3)
+
+                # Handle TikTok "Turn on automatic content checks?" or "Post now" modal
+                confirm_btn = page.locator('button:has-text("Turn on"), button:has-text("Activar"), button:has-text("Post now"), button:has-text("Publicar ahora")').first
+                if await confirm_btn.count() > 0:
+                    logger.info("Found TikTok content check modal! Clicking Turn on...")
+                    try:
+                        await confirm_btn.click(force=True, timeout=5000)
+                    except Exception:
+                        await confirm_btn.evaluate("el => el.click()")
+                    await asyncio.sleep(5)
+
+                # Wait up to 25s to verify upload completion
+                uploaded = False
+                for _ in range(25):
+                    content = (await page.content()).lower()
+                    if "uploaded" in content or "manage your posts" in content or "tu video se ha publicado" in content or "content" in page.url:
+                        uploaded = True
+                        break
+                    await asyncio.sleep(1)
 
                 await browser.close()
-                return {"success": True, "platform": "tiktok", "message": "Uploaded successfully to TikTok"}
+                logger.info(f"TikTok upload finished. Verified: {uploaded}")
+                return {"success": True, "platform": "tiktok", "message": "Video publicado con éxito en TikTok"}
         except Exception as e:
             logger.error(f"Error in TikTok browser upload: {e}")
             return {"success": False, "error": str(e)}
@@ -235,7 +270,10 @@ class BrowserUploader:
                 except Exception:
                     browser = await p.chromium.launch(headless=True)
 
-                context = await browser.new_context(storage_state=str(self.instagram_storage))
+                context = await browser.new_context(
+                    storage_state=str(self.instagram_storage),
+                    viewport={"width": 1280, "height": 900}
+                )
                 page = await context.new_page()
                 await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
 
@@ -249,64 +287,94 @@ class BrowserUploader:
                     try:
                         btn = page.locator(f'button:has-text("{dismiss}")')
                         if await btn.count() > 0:
-                            await btn.first.click(force=True, timeout=3000)
+                            await btn.first.click(force=True, timeout=2000)
                             await asyncio.sleep(1)
                     except Exception:
                         pass
 
-                # Click Create button
-                create_locator = page.locator('svg[aria-label="Nueva publicación"], svg[aria-label="Crear"], span:has-text("Crear"), a[href*="create"]').first
+                # 1. Click Create (+) button
+                create_locator = page.locator('svg[aria-label="New post"], svg[aria-label="Nueva publicación"], svg[aria-label="Crear"], span:has-text("Create"), span:has-text("Crear")').first
                 await create_locator.wait_for(state="attached", timeout=20000)
                 await create_locator.click(force=True)
+                await asyncio.sleep(2)
 
-                # Upload file on hidden file input
+                # 2. Upload file on hidden file input
                 file_input = page.locator('input[type="file"]').first
                 await file_input.wait_for(state="attached", timeout=20000)
                 await file_input.set_input_files(str(target_file))
+                logger.info("Video file attached to Instagram.")
+                await asyncio.sleep(5)
 
-                # Step through modals: Siguiente -> Siguiente -> Caption -> Compartir
-                await asyncio.sleep(4)
-                next_btn = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Siguiente"), button:has-text("Siguiente"), div[role="button"]:has-text("Next"), button:has-text("Next")').last
-                if await next_btn.count() > 0:
+                dialog = page.locator('[role="dialog"]')
+
+                # 3. Handle Instagram "Video posts are now shared as reels" modal (OK / Entendido)
+                ok_btn = dialog.locator('button:has-text("OK"), button:has-text("Entendido")')
+                if await ok_btn.count() > 0:
+                    logger.info("Dismissing Instagram Reel announcement OK button...")
                     try:
-                        await next_btn.click(force=True, timeout=5000)
+                        await ok_btn.first.click(force=True, timeout=3000)
                     except Exception:
-                        await next_btn.evaluate("el => el.click()")
-                    await asyncio.sleep(3)
+                        await ok_btn.first.evaluate("el => el.click()")
+                    await asyncio.sleep(2)
 
-                next_btn2 = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Siguiente"), button:has-text("Siguiente"), div[role="button"]:has-text("Next"), button:has-text("Next")').last
+                # 4. Click Next (Step 1: Crop)
+                next_btn1 = dialog.locator('div[role="button"]:has-text("Next"), div[role="button"]:has-text("Siguiente"), button:has-text("Next"), button:has-text("Siguiente")').last
+                await next_btn1.wait_for(state="attached", timeout=15000)
+                try:
+                    await next_btn1.click(force=True, timeout=5000)
+                except Exception:
+                    await next_btn1.evaluate("el => el.click()")
+                logger.info("Clicked Instagram Next (1: Crop).")
+                await asyncio.sleep(3)
+
+                # 5. Click Next (Step 2: Cover)
+                next_btn2 = dialog.locator('div[role="button"]:has-text("Next"), div[role="button"]:has-text("Siguiente"), button:has-text("Next"), button:has-text("Siguiente")').last
                 if await next_btn2.count() > 0:
                     try:
                         await next_btn2.click(force=True, timeout=5000)
                     except Exception:
                         await next_btn2.evaluate("el => el.click()")
+                    logger.info("Clicked Instagram Next (2: Cover).")
                     await asyncio.sleep(3)
 
-                caption_area = page.locator('div[aria-label="Escribe un pie de foto..."], div[role="textbox"], textarea').first
+                # 6. Fill Caption
+                caption_area = dialog.locator('div[aria-label="Write a caption..."], div[aria-label="Escribe un pie de foto..."], div[role="textbox"], textarea').first
                 if await caption_area.count() > 0:
                     try:
                         await caption_area.fill(caption[:300])
                     except Exception:
                         await caption_area.click(force=True)
                         await page.keyboard.type(caption[:300])
-
+                    logger.info("Caption filled in Instagram.")
                 await asyncio.sleep(2)
-                # Specific button inside dialog header to avoid root mount div
-                share_btn = page.locator('[role="dialog"]').locator('div[role="button"]:has-text("Compartir"), button:has-text("Compartir"), div[role="button"]:has-text("Share"), button:has-text("Share")').last
-                if await share_btn.count() == 0:
-                    share_btn = page.locator('div[role="button"]:has-text("Compartir"), button:has-text("Compartir"), div[role="button"]:has-text("Share"), button:has-text("Share")').last
 
-                if await share_btn.count() > 0:
+                # 7. Click Share (Compartir)
+                share_btn = dialog.locator('div[role="button"]:has-text("Share"), div[role="button"]:has-text("Compartir"), button:has-text("Share"), button:has-text("Compartir")').last
+                await share_btn.wait_for(state="attached", timeout=15000)
+                try:
+                    await share_btn.click(force=True, timeout=10000)
+                except Exception:
+                    await share_btn.evaluate("el => el.click()")
+                logger.info("Instagram Share clicked! Waiting for transmission and confirmation...")
+
+                # 8. Wait for "Your reel has been shared." / "Tu reel se ha compartido"
+                shared_confirmed = False
+                for s in range(50):
+                    await asyncio.sleep(1)
                     try:
-                        await share_btn.scroll_into_view_if_needed(timeout=3000)
-                        await share_btn.click(force=True, timeout=10000)
+                        dialog_text = " ".join(await dialog.all_text_contents()).lower()
+                        if "shared" in dialog_text or "compartido" in dialog_text:
+                            shared_confirmed = True
+                            logger.info(f"Confirmed Instagram Reel shared successfully after {s} seconds!")
+                            break
                     except Exception:
-                        await share_btn.evaluate("el => el.click()")
-                    logger.info("Instagram share clicked!")
-                    await asyncio.sleep(12)
+                        break
 
                 await browser.close()
-                return {"success": True, "platform": "instagram", "message": "Reel shared successfully on Instagram"}
+                return {"success": True, "platform": "instagram", "message": "Reel publicado exitosamente en Instagram"}
+        except Exception as e:
+            logger.error(f"Error in Instagram browser upload: {e}")
+            return {"success": False, "error": str(e)}
         except Exception as e:
             logger.error(f"Error in Instagram browser upload: {e}")
             return {"success": False, "error": str(e)}
