@@ -618,22 +618,29 @@
 
   <!-- Clip Details & Publication Modal -->
   <div id="clip-details-modal" class="modal">
-    <div class="modal-content" style="max-width: 820px; width: 95%;">
+    <div class="modal-content" style="max-width: 840px; width: 95%;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;">
-        <h3 id="modal-clip-title" style="font-size: 16px; font-weight: 800; color: #fff;">Detalles del Clip</h3>
+        <h3 id="modal-clip-title" style="font-size: 16px; font-weight: 800; color: #fff;">Detalles y Kit Viral del Clip</h3>
         <button onclick="closeClipDetailsModal()" style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">✕</button>
       </div>
 
-      <div style="display: grid; grid-template-columns: 260px 1fr; gap: 18px;">
-        <!-- Left: Short Video Player -->
+      <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px;">
+        <!-- Left: Short Video Player & Direct Download -->
         <div>
-          <div style="border-radius: 12px; overflow: hidden; background: #000; border: 1px solid var(--card-border); aspect-ratio: 9/16; max-height: 440px; display: flex; align-items: center; justify-content: center;">
+          <div style="border-radius: 12px; overflow: hidden; background: #000; border: 1px solid var(--card-border); aspect-ratio: 9/16; max-height: 420px; display: flex; align-items: center; justify-content: center;">
             <video id="modal-video-player" controls style="width: 100%; height: 100%; object-fit: contain;"></video>
           </div>
+          <a id="modal-download-btn" href="#" download class="btn-primary" style="margin-top: 12px; width: 100%; justify-content: center; text-decoration: none; padding: 10px 14px; font-weight: 800; font-size: 13px; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4); text-align: center; display: flex; align-items: center; gap: 8px;">
+            📥 Descargar Video HD (1080p 9:16)
+          </a>
+          <button id="modal-toggle-status-btn" class="btn-secondary" style="margin-top: 8px; width: 100%; justify-content: center; font-size: 11.5px; padding: 7px 10px;" onclick="toggleCurrentClipStatus()">
+            ✅ Marcar como Subido / Pendiente
+          </button>
         </div>
 
-        <!-- Right: Enriched Info -->
+        <!-- Right: Enriched Info, Viral Copy Kit & Quick Upload Links -->
         <div style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Streamer & Game -->
           <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
               <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Streamer & Juego</span>
@@ -646,27 +653,73 @@
             </div>
           </div>
 
-          <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
-            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px;">Transcripción del Audio</label>
-            <div id="modal-transcript-text" style="font-size: 12px; color: #e2e8f0; font-style: italic; max-height: 75px; overflow-y: auto; line-height: 1.4;">Sin audio reconocido</div>
+          <!-- Transcripción del Audio -->
+          <div style="background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <label style="font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 3px;">Transcripción del Audio (Whisper)</label>
+            <div id="modal-transcript-text" style="font-size: 11.5px; color: #e2e8f0; font-style: italic; max-height: 50px; overflow-y: auto; line-height: 1.3;">Sin audio reconocido</div>
           </div>
 
-          <div style="background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);">
-            <label style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px;">Descripción & Hashtags Virales</label>
-            <div id="modal-desc-tags" style="font-size: 11.5px; color: #cbd5e1; max-height: 70px; overflow-y: auto; line-height: 1.4;"></div>
-          </div>
-
-          <!-- Single Social Publishing Buttons -->
-          <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid var(--card-border);">
-            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;">Publicación Directa por Red:</span>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button id="btn-modal-pub-yt" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('youtube')">🔴 YouTube</button>
-              <button id="btn-modal-pub-tk" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('tiktok')">🎵 TikTok</button>
-              <button id="btn-modal-pub-ig" class="btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="publishModalClip('instagram')">📸 Instagram</button>
-              <button id="btn-modal-pub-all" class="btn-primary" style="font-size: 11px; padding: 5px 12px; margin-left: auto;" onclick="publishModalClip('all')">🚀 Publicar en Todas</button>
+          <!-- Kit Viral Copiable (Título, Descripción, Hashtags) -->
+          <div style="background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.08)); border: 1px solid rgba(168,85,247,0.3); padding: 12px; border-radius: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 12px; font-weight: 800; color: #c084fc; text-transform: uppercase; letter-spacing: 0.5px;">📦 Kit Viral para Redes Sociales</span>
+              <button class="btn-primary" onclick="copyFullPack()" style="padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #a855f7, #6366f1); border: none;">
+                ✨ Copiar Pack Completo
+              </button>
             </div>
-            <div id="modal-pub-status" style="margin-top: 8px; font-size: 11px; color: var(--text-muted);"></div>
+
+            <!-- Título Viral -->
+            <div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 3px;">
+                <span>Título Gancho (Hook):</span>
+                <span style="color: #a855f7; cursor: pointer; font-weight: 600;" onclick="copyModalField('modal-input-title', 'Título')">📋 Copiar</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <input id="modal-input-title" readonly style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;">
+                <button class="btn-secondary" style="padding: 4px 9px; font-size: 11px;" onclick="copyModalField('modal-input-title', 'Título')">📋</button>
+              </div>
+            </div>
+
+            <!-- Descripción y Hashtags -->
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 3px;">
+                <span>Descripción & Hashtags Virales:</span>
+                <span style="color: #a855f7; cursor: pointer; font-weight: 600;" onclick="copyModalField('modal-input-desc', 'Descripción y Hashtags')">📋 Copiar</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <textarea id="modal-input-desc" readonly rows="3" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); color: #cbd5e1; padding: 6px 10px; border-radius: 6px; font-size: 11px; line-height: 1.4; resize: none;"></textarea>
+                <button class="btn-secondary" style="padding: 4px 9px; font-size: 11px;" onclick="copyModalField('modal-input-desc', 'Descripción y Hashtags')">📋</button>
+              </div>
+            </div>
           </div>
+
+          <!-- Accesos Directos a Subida Manual en 1 Clic -->
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); padding: 10px 12px; border-radius: 10px;">
+            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;">Subir en 1 Clic (Abre el Creador Web Oficial):</span>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <a href="https://www.tiktok.com/tiktokstudio/upload" target="_blank" class="btn-secondary" style="font-size: 11.5px; padding: 6px 12px; text-decoration: none; color: #00f2fe; border-color: rgba(0,242,234,0.3); background: rgba(0,242,234,0.08); display: flex; align-items: center; gap: 4px;">
+                🎵 TikTok Studio ↗️
+              </a>
+              <a href="https://www.instagram.com/" target="_blank" class="btn-secondary" style="font-size: 11.5px; padding: 6px 12px; text-decoration: none; color: #ff4da6; border-color: rgba(225,48,108,0.3); background: rgba(225,48,108,0.08); display: flex; align-items: center; gap: 4px;">
+                📸 Instagram Reels ↗️
+              </a>
+              <a href="https://studio.youtube.com/channel/upload" target="_blank" class="btn-secondary" style="font-size: 11.5px; padding: 6px 12px; text-decoration: none; color: #ff6b6b; border-color: rgba(255,0,0,0.3); background: rgba(255,0,0,0.08); display: flex; align-items: center; gap: 4px;">
+                🔴 YouTube Shorts ↗️
+              </a>
+            </div>
+          </div>
+
+          <!-- Acordeón Opcional: Subida Automática con Bot -->
+          <details style="margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+            <summary style="cursor: pointer; padding: 4px 0; color: #94a3b8; user-select: none;">🤖 Subida Automática Directa con Bot (Experimental)</summary>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+              <button id="btn-modal-pub-yt" class="btn-secondary" style="font-size: 10px; padding: 4px 8px;" onclick="publishModalClip('youtube')">🔴 YouTube</button>
+              <button id="btn-modal-pub-tk" class="btn-secondary" style="font-size: 10px; padding: 4px 8px;" onclick="publishModalClip('tiktok')">🎵 TikTok</button>
+              <button id="btn-modal-pub-ig" class="btn-secondary" style="font-size: 10px; padding: 4px 8px;" onclick="publishModalClip('instagram')">📸 Instagram</button>
+              <button id="btn-modal-pub-all" class="btn-primary" style="font-size: 10px; padding: 4px 10px; margin-left: auto;" onclick="publishModalClip('all')">🚀 Publicar en Todas</button>
+            </div>
+            <div id="modal-pub-status" style="margin-top: 6px; font-size: 11px;"></div>
+          </details>
         </div>
       </div>
     </div>
@@ -929,12 +982,75 @@
 
     let activeModalClipId = null;
 
+    function showToast(msg) {
+      let toast = document.getElementById('toast-notification');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-notification';
+        toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; background: #1e1b4b; border: 1px solid #6366f1; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 99999; display: none; transition: all 0.3s ease;';
+        document.body.appendChild(toast);
+      }
+      toast.innerText = msg;
+      toast.style.display = 'block';
+      toast.style.opacity = '1';
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { toast.style.display = 'none'; }, 300);
+      }, 2500);
+    }
+
+    function copyModalField(elementId, label) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      navigator.clipboard.writeText(el.value || el.innerText);
+      showToast(`📋 ¡${label} copiado al portapapeles!`);
+    }
+
+    function copyFullPack() {
+      const title = document.getElementById('modal-input-title').value;
+      const desc = document.getElementById('modal-input-desc').value;
+      const fullText = `${title}\n\n${desc}`.trim();
+      navigator.clipboard.writeText(fullText);
+      showToast(`✨ ¡Pack Viral completo copiado al portapapeles!`);
+    }
+
+    function copyClipPackQuick(id) {
+      const clip = (window.currentClips || []).find(c => c.id === id);
+      if (!clip) return;
+      const title = clip.ai_title || clip.original_title || '';
+      const desc = `${clip.ai_description || ''}\n\n${clip.ai_hashtags || '#shorts #clips'}`.trim();
+      navigator.clipboard.writeText(`${title}\n\n${desc}`);
+      showToast(`✨ Pack del clip #${id} copiado al portapapeles`);
+    }
+
+    async function toggleClipStatusQuick(id) {
+      try {
+        const res = await fetch(`/api/clips/${id}/toggle-status`, { method: 'POST' });
+        const data = await res.json();
+        showToast(`Clip #${id}: ${data.status === 'PUBLISHED' ? '✓ Marcado como Subido' : 'Pendiente'}`);
+        await loadClips();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleCurrentClipStatus() {
+      if (!activeModalClipId) return;
+      await toggleClipStatusQuick(activeModalClipId);
+      const clip = (window.currentClips || []).find(c => c.id === activeModalClipId);
+      const markBtn = document.getElementById('modal-toggle-status-btn');
+      if (clip && markBtn) {
+        markBtn.innerText = clip.status === 'PUBLISHED' ? '↩️ Cambiar a Pendiente' : '✅ Marcar como Subido';
+      }
+    }
+
     function openClipDetails(id) {
       const clip = (window.currentClips || []).find(c => c.id === id);
       if (!clip) return;
       activeModalClipId = id;
 
-      document.getElementById('modal-clip-title').innerText = clip.ai_title || clip.original_title || ('Clip #' + clip.id);
+      const title = clip.ai_title || clip.original_title || ('Clip #' + clip.id);
+      document.getElementById('modal-clip-title').innerText = title;
       document.getElementById('modal-streamer-name').innerText = clip.streamer_name || 'Desconocido';
       document.getElementById('modal-stream-game').innerText = clip.stream_game || 'Variado';
       document.getElementById('modal-clip-score').innerText = (clip.ai_score >= 8 ? '🔥 ' : '⭐ ') + (clip.ai_score ? clip.ai_score.toFixed(1) : '-');
@@ -950,18 +1066,28 @@
 
       document.getElementById('modal-transcript-text').innerText = clip.transcript_text ? `"${clip.transcript_text}"` : 'Sin audio hablado discernible';
 
-      const descTags = document.getElementById('modal-desc-tags');
-      descTags.innerHTML = `
-        <div style="margin-bottom: 6px;"><strong>Descripción:</strong> ${clip.ai_description || 'Sin descripción'}</div>
-        <div style="color: #38bdf8;"><strong>Hashtags:</strong> ${clip.ai_hashtags || '#shorts #clips'}</div>
-      `;
+      // Fill Viral Kit inputs
+      document.getElementById('modal-input-title').value = title;
+      const fullDesc = `${clip.ai_description || ''}\n\n${clip.ai_hashtags || '#shorts #clips #gaming'}`.trim();
+      document.getElementById('modal-input-desc').value = fullDesc;
 
+      // Video Player & Download button
       const videoPlayer = document.getElementById('modal-video-player');
+      const dlBtn = document.getElementById('modal-download-btn');
       if (clip.processed_path_vertical) {
         const filename = clip.processed_path_vertical.split(/[\\\\/]/).pop();
         videoPlayer.src = `/storage/processed/${filename}`;
+        dlBtn.href = `/api/clips/${clip.id}/download`;
+        dlBtn.style.display = 'flex';
       } else {
         videoPlayer.removeAttribute('src');
+        dlBtn.style.display = 'none';
+      }
+
+      // Mark status button
+      const markBtn = document.getElementById('modal-toggle-status-btn');
+      if (markBtn) {
+        markBtn.innerText = clip.status === 'PUBLISHED' ? '↩️ Cambiar a Pendiente' : '✅ Marcar como Subido';
       }
 
       document.getElementById('modal-pub-status').innerText = '';
@@ -1100,14 +1226,17 @@
               </div>
             </td>
             <td>
-              <span class="status-pill status-${c.status}">${c.status}</span>
+              <span class="status-pill status-${c.status}" style="cursor: pointer;" onclick="toggleClipStatusQuick(${c.id})" title="Clic para alternar entre SUBIDO y PENDIENTE">
+                ${c.status === 'PUBLISHED' ? '✓ SUBIDO' : c.status}
+              </span>
               ${renderPublishBadges(c.publish_logs)}
             </td>
             <td>
               <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                 ${c.processed_path_vertical ? `
-                  <button onclick="openClipDetails(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px;">👁️ Ver / Redes</button>
-                  <button onclick="publishClip(${c.id}, this)" class="btn-primary" style="padding: 4px 10px; font-size: 11px;">🚀 Publicar</button>
+                  <button onclick="openClipDetails(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px;">👁️ Ver / Kit</button>
+                  <a href="/api/clips/${c.id}/download" class="btn-primary" style="padding: 4px 10px; font-size: 11px; text-decoration: none; background: linear-gradient(135deg, #10b981, #059669); display: inline-flex; align-items: center; gap: 3px;" title="Descargar MP4 en 1080p">📥 Descargar</a>
+                  <button onclick="copyClipPackQuick(${c.id})" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Copiar Título y Tags">📋 Pack</button>
                 ` : `
                   <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄 Reintentar</button>
                 `}

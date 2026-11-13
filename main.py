@@ -6,7 +6,7 @@ from typing import List, Optional
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -298,6 +298,34 @@ async def publish_clip_single(clip_id: int, platform: str, db: Session = Depends
         task.status = "PUBLISHED"
     db.commit()
     return res
+
+@app.get("/api/clips/{clip_id}/download")
+def download_clip(clip_id: int, db: Session = Depends(get_db)):
+    """Downloads the processed 9:16 vertical MP4 video directly."""
+    task = db.query(ClipTask).filter(ClipTask.id == clip_id).first()
+    if not task or not task.processed_path_vertical:
+        raise HTTPException(status_code=404, detail="Clip vertical aún no generado o no encontrado")
+    file_path = Path(task.processed_path_vertical)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo de video no encontrado en disco")
+    
+    clean_title = "".join(c for c in (task.ai_title or task.original_title or f"clip_{task.id}") if c.isalnum() or c in (" ", "-", "_")).strip()
+    safe_name = f"{clean_title[:60].strip() or f'clip_{task.id}'}.mp4"
+    return FileResponse(
+        path=str(file_path),
+        filename=safe_name,
+        media_type="video/mp4"
+    )
+
+@app.post("/api/clips/{clip_id}/toggle-status")
+def toggle_clip_status(clip_id: int, db: Session = Depends(get_db)):
+    """Toggles clip status between PUBLISHED and READY_TO_PUBLISH for manual tracking."""
+    task = db.query(ClipTask).filter(ClipTask.id == clip_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Clip no encontrado")
+    task.status = "PUBLISHED" if task.status != "PUBLISHED" else "READY_TO_PUBLISH"
+    db.commit()
+    return {"id": task.id, "status": task.status}
 
 # --- Long-form Compilation API ---
 @app.post("/api/compilations")

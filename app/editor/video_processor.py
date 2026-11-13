@@ -100,10 +100,10 @@ class VideoProcessor:
             "-map", v_map,
             "-map", "0:a?",
             "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "22",
+            "-preset", "fast",
+            "-crf", "18",
             "-c:a", "aac",
-            "-b:a", "192k",
+            "-b:a", "256k",
             "-pix_fmt", "yuv420p",
             output_path
         ]
