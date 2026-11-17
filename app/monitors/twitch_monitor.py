@@ -1,7 +1,7 @@
 import httpx
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.config import settings
 
 logger = logging.getLogger("twitch_monitor")
@@ -109,9 +109,16 @@ class TwitchMonitor:
             logger.error(f"Error fetching Twitch user info for {channel_name}: {e}")
         return None
 
-    async def fetch_recent_clips(self, broadcaster_id: str, started_at: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+    async def fetch_recent_clips(
+        self,
+        broadcaster_id: str,
+        started_at: Optional[str] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
         """
-        Fetches newly created clips for broadcaster during the active stream.
+        Fetches newly created clips for broadcaster.
+        If started_at is not provided, defaults to the last 48 hours to capture trending viral clips.
+        Results are sorted by view_count descending.
         """
         has_token = await self._ensure_token()
         if not has_token:
@@ -121,19 +128,27 @@ class TwitchMonitor:
             "Client-ID": self.client_id,
             "Authorization": f"Bearer {self.access_token}"
         }
+
+        # If no stream start time is provided, default to last 48 hours
+        query_started_at = started_at
+        if not query_started_at:
+            query_started_at = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         params: Dict[str, Any] = {
             "broadcaster_id": broadcaster_id,
-            "first": limit
+            "first": max(limit, 10),
+            "started_at": query_started_at
         }
-        if started_at:
-            params["started_at"] = started_at
 
         url = "https://api.twitch.tv/helix/clips"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(url, headers=headers, params=params)
                 if res.status_code == 200:
-                    return res.json().get("data", [])
+                    clips = res.json().get("data", [])
+                    # Sort by view_count descending so the most viral clip is picked first
+                    clips.sort(key=lambda x: x.get("view_count", 0), reverse=True)
+                    return clips[:limit]
         except Exception as e:
             logger.error(f"Error fetching clips for broadcaster {broadcaster_id}: {e}")
         return []

@@ -11,9 +11,15 @@ class ClipAnalyzer:
         self.api_key = settings.GEMINI_API_KEY
 
     def is_gta6_content(self, game_name: str, title: str, transcript: str) -> bool:
-        """Detects whether content is related to GTA 6 / Grand Theft Auto VI."""
+        """Detects whether content is related to GTA 6 / Grand Theft Auto VI / Vice City."""
         combined = f"{game_name} {title} {transcript}".lower()
-        keywords = ["gta 6", "gta vi", "gta6", "gtavi", "grand theft auto vi", "grand theft auto 6", "vice city", "lucia", "jason"]
+        keywords = [
+            "gta 6", "gta vi", "gta6", "gtavi", "grand theft auto vi", "grand theft auto 6",
+            "vice city", "vicecity", "lucia", "jason", "leonida", "rockstar games", "rockstar",
+            "trailer 2", "gta online", "gta roleplay", "gta rp", "marbella vice", "spainrp",
+            "london rp", "nopixel", "atraco", "persecucion", "persecución", "5 estrellas",
+            "cinco estrellas", "vice city roleplay", "gtarp"
+        ]
         return any(k in combined for k in keywords)
 
     async def analyze_clip(

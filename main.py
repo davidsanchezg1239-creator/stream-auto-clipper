@@ -128,6 +128,7 @@ async def trigger_scan(background_tasks: BackgroundTasks):
 
 # --- GTA 6 Radar & Pre-seeded Streamers ---
 GTA6_PRESET_STREAMERS = [
+    # Top GTA Roleplay & Tier-1 Spanish / Latam Gaming Streamers
     {"platform": "twitch", "channel_name": "auronplay", "display_name": "AuronPlay"},
     {"platform": "twitch", "channel_name": "ibai", "display_name": "Ibai Llanos"},
     {"platform": "twitch", "channel_name": "illojuan", "display_name": "IlloJuan"},
@@ -136,11 +137,31 @@ GTA6_PRESET_STREAMERS = [
     {"platform": "twitch", "channel_name": "thegrefg", "display_name": "TheGrefg"},
     {"platform": "twitch", "channel_name": "spreen", "display_name": "Spreen"},
     {"platform": "twitch", "channel_name": "rivers_gg", "display_name": "Rivers GG"},
+    {"platform": "twitch", "channel_name": "elmariana", "display_name": "ElMariana"},
     {"platform": "twitch", "channel_name": "juansguarnizo", "display_name": "JuanSGuarnizo"},
+    {"platform": "twitch", "channel_name": "carola", "display_name": "Carola"},
+    {"platform": "twitch", "channel_name": "reborn_live", "display_name": "Reborn Live"},
+    {"platform": "twitch", "channel_name": "cristinini", "display_name": "Cristinini"},
+    {"platform": "twitch", "channel_name": "roier", "display_name": "Roier"},
     {"platform": "twitch", "channel_name": "alexby11", "display_name": "Alexby11"},
+    {"platform": "twitch", "channel_name": "carreraaa", "display_name": "Carreraaa"},
+    {"platform": "twitch", "channel_name": "davoxeneize", "display_name": "DavoXeneize"},
+    {"platform": "twitch", "channel_name": "alanafloresf", "display_name": "Alana Flores"},
+    {"platform": "twitch", "channel_name": "djmariio", "display_name": "DJMaRiiO"},
+
+    # Top Kick & Latam Streamers
     {"platform": "kick", "channel_name": "westcol", "display_name": "WestCOL"},
+    {"platform": "kick", "channel_name": "pelicanger", "display_name": "Pelicanger"},
+    {"platform": "kick", "channel_name": "mrstiventc", "display_name": "MrStiven TC"},
+    {"platform": "kick", "channel_name": "brunenger", "display_name": "Brunenger"},
+
+    # Elite Global GTA 6 & NoPixel Streamers
     {"platform": "kick", "channel_name": "xqc", "display_name": "xQc"},
     {"platform": "kick", "channel_name": "adinross", "display_name": "Adin Ross"},
+    {"platform": "twitch", "channel_name": "kaicenat", "display_name": "Kai Cenat"},
+    {"platform": "twitch", "channel_name": "buddha", "display_name": "Buddha (NoPixel)"},
+    {"platform": "twitch", "channel_name": "fanum", "display_name": "Fanum (AMP)"},
+    {"platform": "twitch", "channel_name": "jynxzi", "display_name": "Jynxzi"},
 ]
 
 @app.post("/api/channels/seed-gta6")
@@ -326,6 +347,73 @@ def toggle_clip_status(clip_id: int, db: Session = Depends(get_db)):
     task.status = "PUBLISHED" if task.status != "PUBLISHED" else "READY_TO_PUBLISH"
     db.commit()
     return {"id": task.id, "status": task.status}
+
+def delete_clip_files(clip: ClipTask):
+    """Safely deletes all local video, audio, and subtitle files associated with a clip."""
+    paths_to_delete = [
+        clip.download_path,
+        clip.processed_path_vertical,
+        clip.subtitle_ass_path,
+        clip.thumbnail_path
+    ]
+    for p in paths_to_delete:
+        if p:
+            try:
+                f = Path(p)
+                if f.exists():
+                    f.unlink()
+                    logger.info(f"Deleted file from disk: {p}")
+            except Exception as e:
+                logger.warning(f"Could not delete file {p}: {e}")
+
+@app.delete("/api/clips/{clip_id}")
+def delete_single_clip(clip_id: int, db: Session = Depends(get_db)):
+    """Deletes a single clip and frees up disk space."""
+    task = db.query(ClipTask).filter(ClipTask.id == clip_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Clip no encontrado")
+    delete_clip_files(task)
+    db.delete(task)
+    db.commit()
+    return {"success": True, "message": f"Clip #{clip_id} y sus archivos asociados han sido eliminados"}
+
+class BulkDeletePayload(BaseModel):
+    clip_ids: List[int]
+
+@app.post("/api/clips/bulk-delete")
+def bulk_delete_clips(payload: BulkDeletePayload, db: Session = Depends(get_db)):
+    """Deletes multiple clips in batch."""
+    deleted_count = 0
+    for cid in payload.clip_ids:
+        task = db.query(ClipTask).filter(ClipTask.id == cid).first()
+        if task:
+            delete_clip_files(task)
+            db.delete(task)
+            deleted_count += 1
+    db.commit()
+    return {"success": True, "deleted_count": deleted_count, "message": f"Se eliminaron {deleted_count} clips y sus archivos"}
+
+@app.post("/api/clips/cleanup-published")
+def cleanup_published_clips(db: Session = Depends(get_db)):
+    """Purges all clips that have already been marked as PUBLISHED / uploaded."""
+    tasks = db.query(ClipTask).filter(ClipTask.status == "PUBLISHED").all()
+    count = len(tasks)
+    for task in tasks:
+        delete_clip_files(task)
+        db.delete(task)
+    db.commit()
+    return {"success": True, "deleted_count": count, "message": f"Se depuraron {count} clips ya publicados"}
+
+@app.post("/api/clips/cleanup-failed")
+def cleanup_failed_clips(db: Session = Depends(get_db)):
+    """Purges all failed clip attempts."""
+    tasks = db.query(ClipTask).filter(ClipTask.status == "FAILED").all()
+    count = len(tasks)
+    for task in tasks:
+        delete_clip_files(task)
+        db.delete(task)
+    db.commit()
+    return {"success": True, "deleted_count": count, "message": f"Se depuraron {count} clips fallidos"}
 
 # --- Long-form Compilation API ---
 @app.post("/api/compilations")

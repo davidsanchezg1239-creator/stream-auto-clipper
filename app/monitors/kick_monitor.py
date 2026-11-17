@@ -58,15 +58,16 @@ class KickMonitor:
             logger.error(f"Exception checking Kick stream for {slug}: {e}")
             return {"is_live": False, "error": str(e)}
 
-    async def fetch_recent_clips(self, channel_name: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def fetch_recent_clips(self, channel_name: str, limit: int = 8) -> List[Dict[str, Any]]:
         """
-        Fetches recently created clips from the Kick channel.
+        Fetches top viral clips from the Kick channel.
+        Sorts by view count to prioritize the highest engagement moments.
         """
         slug = channel_name.lower().strip()
         url = f"https://kick.com/api/v2/channels/{slug}/clips"
         try:
             async with httpx.AsyncClient(timeout=10.0, headers=self.headers, follow_redirects=True) as client:
-                res = await client.get(url, params={"sort": "date", "time": "day"})
+                res = await client.get(url, params={"sort": "view", "time": "week"})
                 if res.status_code == 200:
                     clips_data = res.json().get("clips", [])
                     return clips_data[:limit]

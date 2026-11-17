@@ -528,13 +528,22 @@
       <!-- Right Column: Processed Clips & Viral Pipeline -->
       <div>
         <div class="card">
-          <div class="card-title" style="flex-wrap: wrap; gap: 12px;">
-            <span>🎬 Cola de Clips y Shorts Generados</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="openCompilationModal()">
-                🎬 Compilar Seleccionados (10 min)
+          <div class="card-title" style="flex-wrap: wrap; gap: 10px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span>🎬 Cola de Clips y Shorts</span>
+              <span id="clips-counter-badge" style="font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 12px; color: #a5b4fc; font-weight: 700;">0 clips</span>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-left: auto;">
+              <button class="btn-primary" style="padding: 5px 12px; font-size: 11px;" onclick="openCompilationModal()">
+                🎬 Compilar (10 min)
               </button>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadClips()">Actualizar</button>
+              <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.4);" onclick="deleteSelectedClips()">
+                🗑️ Eliminar (<span id="delete-selected-count">0</span>)
+              </button>
+              <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; color: #10b981; border-color: rgba(16,185,129,0.4);" onclick="cleanupPublishedClips()" title="Elimina todos los clips marcados como PUBLISHED / SUBIDO">
+                🧹 Limpiar Ya Subidos
+              </button>
+              <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px;" onclick="loadClips()">Actualizar</button>
             </div>
           </div>
           <div style="overflow-x: auto;">
@@ -635,6 +644,9 @@
           </a>
           <button id="modal-toggle-status-btn" class="btn-secondary" style="margin-top: 8px; width: 100%; justify-content: center; font-size: 11.5px; padding: 7px 10px;" onclick="toggleCurrentClipStatus()">
             ✅ Marcar como Subido / Pendiente
+          </button>
+          <button id="modal-delete-btn" class="btn-secondary" style="margin-top: 6px; width: 100%; justify-content: center; font-size: 11px; padding: 6px 10px; color: #ef4444; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06);" onclick="deleteCurrentModalClip()">
+            🗑️ Eliminar este Clip (Liberar espacio)
           </button>
         </div>
 
@@ -903,13 +915,21 @@
 
     let selectedClipIds = new Set();
 
+    function updateSelectionCounters() {
+      const count = selectedClipIds.size;
+      const compEl = document.getElementById('selected-clips-count');
+      if (compEl) compEl.innerText = count;
+      const delEl = document.getElementById('delete-selected-count');
+      if (delEl) delEl.innerText = count;
+    }
+
     function toggleClipSelection(id, checkbox) {
       if (checkbox.checked) {
         selectedClipIds.add(id);
       } else {
         selectedClipIds.delete(id);
       }
-      document.getElementById('selected-clips-count').innerText = selectedClipIds.size;
+      updateSelectionCounters();
     }
 
     function toggleSelectAllClips(masterCheckbox) {
@@ -920,7 +940,75 @@
         if (masterCheckbox.checked) selectedClipIds.add(id);
         else selectedClipIds.delete(id);
       });
-      document.getElementById('selected-clips-count').innerText = selectedClipIds.size;
+      updateSelectionCounters();
+    }
+
+    async function deleteSingleClip(id) {
+      if (!confirm(`¿Eliminar definitivamente el Clip #${id} y borrar sus archivos de video para liberar espacio?`)) return;
+      try {
+        const res = await fetch(`/api/clips/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        showToast(data.message || `Clip #${id} eliminado`);
+        if (activeModalClipId === id) {
+          closeClipDetailsModal();
+        }
+        selectedClipIds.delete(id);
+        updateSelectionCounters();
+        await loadClips();
+      } catch (e) {
+        alert('Error al eliminar clip: ' + e);
+      }
+    }
+
+    async function deleteCurrentModalClip() {
+      if (!activeModalClipId) return;
+      await deleteSingleClip(activeModalClipId);
+    }
+
+    async function deleteSelectedClips() {
+      if (selectedClipIds.size === 0) {
+        alert('Por favor selecciona al menos 1 clip con las casillas de la izquierda para eliminar.');
+        return;
+      }
+      if (!confirm(`¿Eliminar permanentemente los ${selectedClipIds.size} clips seleccionados y sus videos en disco?`)) return;
+      try {
+        const res = await fetch('/api/clips/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clip_ids: Array.from(selectedClipIds) })
+        });
+        const data = await res.json();
+        showToast(data.message || `Se eliminaron ${data.deleted_count} clips`);
+        selectedClipIds.clear();
+        updateSelectionCounters();
+        await loadClips();
+      } catch (e) {
+        alert('Error al eliminar clips seleccionados: ' + e);
+      }
+    }
+
+    async function cleanupPublishedClips() {
+      if (!confirm('¿Depurar todos los clips que ya tienen estado SUBIDO / PUBLISHED? Esto borrará los archivos de video y mantendrá tu espacio en disco limpio.')) return;
+      try {
+        const res = await fetch('/api/clips/cleanup-published', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || `Clips publicados eliminados`);
+        await loadClips();
+      } catch (e) {
+        alert('Error en la depuración: ' + e);
+      }
+    }
+
+    async function cleanupFailedClips() {
+      if (!confirm('¿Eliminar todos los clips que fallaron durante la descarga o procesamiento?')) return;
+      try {
+        const res = await fetch('/api/clips/cleanup-failed', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || `Clips fallidos eliminados`);
+        await loadClips();
+      } catch (e) {
+        alert('Error en la depuración: ' + e);
+      }
     }
 
     function openCompilationModal() {
@@ -1176,6 +1264,8 @@
         const clips = await res.json();
         window.currentClips = clips;
         const tbody = document.getElementById('clips-tbody');
+        const countBadge = document.getElementById('clips-counter-badge');
+        if (countBadge) countBadge.innerText = `${clips.length} clips`;
 
         if (!clips || clips.length === 0) {
           tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No hay clips procesados aún.</td></tr>`;
@@ -1237,8 +1327,10 @@
                   <button onclick="openClipDetails(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px;">👁️ Ver / Kit</button>
                   <a href="/api/clips/${c.id}/download" class="btn-primary" style="padding: 4px 10px; font-size: 11px; text-decoration: none; background: linear-gradient(135deg, #10b981, #059669); display: inline-flex; align-items: center; gap: 3px;" title="Descargar MP4 en 1080p">📥 Descargar</a>
                   <button onclick="copyClipPackQuick(${c.id})" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Copiar Título y Tags">📋 Pack</button>
+                  <button onclick="deleteSingleClip(${c.id})" style="background: none; border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer;" title="Eliminar clip y liberar espacio">🗑️</button>
                 ` : `
                   <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄 Reintentar</button>
+                  <button onclick="deleteSingleClip(${c.id})" style="background: none; border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer;" title="Eliminar clip">🗑️</button>
                 `}
               </div>
             </td>

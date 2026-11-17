@@ -53,6 +53,25 @@ class ClipperPipeline:
         finally:
             db.close()
 
+    def _filter_and_prioritize_clips(self, raw_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filters clips by ideal vertical short duration (10s - 90s) and prioritizes GTA 6 and high views."""
+        valid = []
+        for c in raw_clips:
+            dur = float(c.get("duration", 30.0) or 30.0)
+            if dur < 10.0 or dur > 90.0:
+                continue
+            valid.append(c)
+
+        def score_clip(clip_item):
+            title = (clip_item.get("title") or "").lower()
+            views = int(clip_item.get("view_count", 0) or 0)
+            gta_keywords = ["gta", "vice city", "lucia", "jason", "rockstar", "heist", "atraco", "policia", "persecucion", "5 estrellas"]
+            is_gta = any(k in title for k in gta_keywords)
+            return (1 if is_gta else 0, views)
+
+        valid.sort(key=score_clip, reverse=True)
+        return valid
+
     async def check_channel(self, channel_id: int) -> Dict[str, Any]:
         """Checks status of a single channel and imports new clips if live."""
         db: Session = SessionLocal()
@@ -71,20 +90,36 @@ class ClipperPipeline:
                 status_data = await self.twitch_monitor.get_stream_status(channel.channel_name)
                 is_live = status_data.get("is_live", False)
                 channel.is_live = is_live
+                user_id = status_data.get("user_id")
+
                 if is_live:
                     channel.stream_title = status_data.get("title")
                     channel.stream_game = status_data.get("game_name")
                     is_gta6 = self.analyzer.is_gta6_content(
                         channel.stream_game or "", channel.stream_title or "", ""
                     )
-                    user_id = status_data.get("user_id")
-                    if user_id and channel.auto_clip_enabled:
-                        fetch_limit = 10 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else 3
-                        if is_gta6:
-                            logger.info(f"🚨 [GTA 6 RADAR] {channel.channel_name} is LIVE on GTA VI ({channel.stream_title})! Fetching {fetch_limit} clips.")
-                        clips_data = await self.twitch_monitor.fetch_recent_clips(
-                            user_id, started_at=status_data.get("started_at"), limit=fetch_limit
-                        )
+                else:
+                    # If offline, resolve user_id via get_user_info so we can harvest 48h clips
+                    if not user_id:
+                        user_info = await self.twitch_monitor.get_user_info(channel.channel_name)
+                        if user_info:
+                            user_id = user_info.get("id")
+                            if not channel.avatar_url:
+                                channel.avatar_url = user_info.get("profile_image_url")
+                            if not channel.display_name:
+                                channel.display_name = user_info.get("display_name")
+
+                if user_id and channel.auto_clip_enabled:
+                    fetch_limit = 12 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 4)
+                    if is_gta6:
+                        logger.info(f"🚨 [GTA 6 RADAR] Twitch {channel.channel_name} is LIVE on GTA VI ({channel.stream_title})! Fetching {fetch_limit} clips.")
+                    raw_clips = await self.twitch_monitor.fetch_recent_clips(
+                        user_id,
+                        started_at=status_data.get("started_at") if is_live else None,
+                        limit=fetch_limit
+                    )
+                    clips_data = self._filter_and_prioritize_clips(raw_clips)
+
             elif platform == "kick":
                 status_data = await self.kick_monitor.get_stream_status(channel.channel_name)
                 is_live = status_data.get("is_live", False)
@@ -95,11 +130,15 @@ class ClipperPipeline:
                     is_gta6 = self.analyzer.is_gta6_content(
                         channel.stream_game or "", channel.stream_title or "", ""
                     )
-                    if channel.auto_clip_enabled:
-                        fetch_limit = 10 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else 3
-                        if is_gta6:
-                            logger.info(f"🚨 [GTA 6 RADAR] Kick {channel.channel_name} is LIVE on GTA VI! Fetching {fetch_limit} clips.")
-                        clips_data = await self.kick_monitor.fetch_recent_clips(channel.channel_name, limit=fetch_limit)
+                if not channel.display_name and status_data.get("display_name"):
+                    channel.display_name = status_data.get("display_name")
+
+                if channel.auto_clip_enabled:
+                    fetch_limit = 12 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 3)
+                    if is_gta6:
+                        logger.info(f"🚨 [GTA 6 RADAR] Kick {channel.channel_name} is LIVE on GTA VI! Fetching {fetch_limit} clips.")
+                    raw_clips = await self.kick_monitor.fetch_recent_clips(channel.channel_name, limit=fetch_limit)
+                    clips_data = self._filter_and_prioritize_clips(raw_clips)
 
             db.commit()
 
