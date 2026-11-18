@@ -29,19 +29,26 @@ class StreamRecorder:
             return {"success": False, "error": "yt-dlp is missing"}
 
         filename = custom_filename or f"clip_{uuid.uuid4().hex[:8]}"
-        output_template = str(self.downloads_dir / f"{filename}.%(ext)s")
+        downloads_dir = Path(self.downloads_dir).resolve()
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        output_template = str(downloads_dir / f"{filename}.%(ext)s")
 
         ydl_opts = {
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
             "outtmpl": output_template,
             "quiet": True,
             "no_warnings": True,
             "merge_output_format": "mp4",
         }
 
-        # If custom ffmpeg is specified and exists, pass it to yt-dlp
+        # If custom ffmpeg is specified and exists, pass its resolved directory
         if self.ffmpeg_bin and self.ffmpeg_bin != "ffmpeg":
-            ydl_opts["ffmpeg_location"] = str(Path(self.ffmpeg_bin).parent)
+            try:
+                resolved_bin = Path(self.ffmpeg_bin).resolve()
+                if resolved_bin.exists():
+                    ydl_opts["ffmpeg_location"] = str(resolved_bin.parent)
+            except Exception:
+                pass
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

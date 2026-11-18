@@ -70,8 +70,12 @@ for folder in [
 
 def find_ffmpeg_binary() -> str:
     """Finds ffmpeg binary in PATH or common Windows winget/custom locations."""
-    if shutil.which(settings.FFMPEG_PATH):
-        return settings.FFMPEG_PATH
+    which_bin = shutil.which(settings.FFMPEG_PATH)
+    if which_bin:
+        try:
+            return str(Path(which_bin).resolve())
+        except Exception:
+            return which_bin
 
     # Common Windows installation paths (Winget, Scoop, Program Files)
     possible_paths = [
@@ -82,5 +86,8 @@ def find_ffmpeg_binary() -> str:
     ]
     for p in possible_paths:
         if p.exists():
-            return str(p)
+            try:
+                return str(p.resolve())
+            except Exception:
+                return str(p)
     return settings.FFMPEG_PATH

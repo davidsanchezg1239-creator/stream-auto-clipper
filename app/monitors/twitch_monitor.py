@@ -181,7 +181,12 @@ class TwitchMonitor:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     res = await client.get(url, headers=headers, params=params)
                     if res.status_code == 200:
-                        all_clips.extend(res.json().get("data", []))
+                        raw_data = res.json().get("data", [])
+                        for c in raw_data:
+                            lang = (c.get("language") or "").lower()
+                            # Filter only Spanish and English content, discard other languages (ja, ru, tr, etc.)
+                            if lang in ["es", "en", ""]:
+                                all_clips.append(c)
             except Exception as e:
                 logger.error(f"Error fetching Twitch GTA clips for game {g_id}: {e}")
 

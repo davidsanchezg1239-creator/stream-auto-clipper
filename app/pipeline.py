@@ -82,19 +82,30 @@ class ClipperPipeline:
                     broadcaster = clip_item.get("broadcaster_name", "GTA Streamer")
                     # Try to link to channel if exists
                     ch = db.query(Channel).filter(Channel.channel_name == broadcaster.lower(), Channel.platform == "twitch").first()
+                    raw_title = f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}"
+                    meta = self.analyzer.generate_smart_viral_title(
+                        original_title=raw_title,
+                        streamer_name=broadcaster,
+                        game_name="Grand Theft Auto VI"
+                    )
                     task = ClipTask(
                         channel_id=ch.id if ch else None,
                         source_platform="twitch",
                         source_url=clip_url,
-                        original_title=f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}",
+                        original_title=raw_title,
                         duration_seconds=clip_item.get("duration", 30.0),
+                        ai_title=meta.get("title"),
+                        ai_score=meta.get("score", 9.5),
+                        ai_category=meta.get("category", "funny"),
+                        ai_description=meta.get("description", ""),
+                        ai_hashtags=meta.get("hashtags", ""),
                         status="PENDING"
                     )
                     db.add(task)
                     db.commit()
                     db.refresh(task)
                     count += 1
-                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Twitch clip queued: {task.original_title} ({clip_url})")
+                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Twitch clip queued: {task.ai_title} ({clip_url})")
                     asyncio.create_task(self.process_clip(task.id))
         except Exception as e:
             logger.error(f"Error in Twitch GTA Radar: {e}")
@@ -111,19 +122,30 @@ class ClipperPipeline:
                     channel_info = clip_item.get("channel", {})
                     broadcaster = channel_info.get("username", "Kick GTA")
                     ch = db.query(Channel).filter(Channel.channel_name == broadcaster.lower(), Channel.platform == "kick").first()
+                    raw_title = f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}"
+                    meta = self.analyzer.generate_smart_viral_title(
+                        original_title=raw_title,
+                        streamer_name=broadcaster,
+                        game_name="Grand Theft Auto VI"
+                    )
                     task = ClipTask(
                         channel_id=ch.id if ch else None,
                         source_platform="kick",
                         source_url=clip_url,
-                        original_title=f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}",
+                        original_title=raw_title,
                         duration_seconds=clip_item.get("duration", 30.0),
+                        ai_title=meta.get("title"),
+                        ai_score=meta.get("score", 9.5),
+                        ai_category=meta.get("category", "funny"),
+                        ai_description=meta.get("description", ""),
+                        ai_hashtags=meta.get("hashtags", ""),
                         status="PENDING"
                     )
                     db.add(task)
                     db.commit()
                     db.refresh(task)
                     count += 1
-                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Kick clip queued: {task.original_title} ({clip_url})")
+                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Kick clip queued: {task.ai_title} ({clip_url})")
                     asyncio.create_task(self.process_clip(task.id))
         except Exception as e:
             logger.error(f"Error in Kick GTA Radar: {e}")
@@ -240,18 +262,29 @@ class ClipperPipeline:
                 # Check if clip is already registered
                 existing = db.query(ClipTask).filter(ClipTask.source_url == clip_url).first()
                 if not existing:
+                    raw_title = clip_item.get("title", "")
+                    meta = self.analyzer.generate_smart_viral_title(
+                        original_title=raw_title,
+                        streamer_name=channel.display_name or channel.channel_name,
+                        game_name=channel.stream_game or ""
+                    )
                     task = ClipTask(
                         channel_id=channel.id,
                         source_platform=platform,
                         source_url=clip_url,
-                        original_title=clip_item.get("title", ""),
+                        original_title=raw_title,
                         duration_seconds=clip_item.get("duration", 30.0),
+                        ai_title=meta.get("title"),
+                        ai_score=meta.get("score", 8.0),
+                        ai_category=meta.get("category", "funny"),
+                        ai_description=meta.get("description", ""),
+                        ai_hashtags=meta.get("hashtags", ""),
                         status="PENDING"
                     )
                     db.add(task)
                     db.commit()
                     db.refresh(task)
-                    logger.info(f"Discovered new clip: {task.original_title} ({clip_url})")
+                    logger.info(f"Discovered new clip: {task.ai_title} ({clip_url})")
 
                     # Dispatch clip processing in non-blocking background task
                     asyncio.create_task(self.process_clip(task.id))

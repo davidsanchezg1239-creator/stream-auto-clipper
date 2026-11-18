@@ -91,8 +91,8 @@ Responde EXCLUSIVAMENTE en formato JSON válido con la siguiente estructura:
   "should_publish": true
 }}
 """
-        # 1. Try gemini-3.5-flash-lite first
-        for model_name in ["gemini-3.5-flash-lite", "gemma-4-26b-a4b-it"]:
+        # 1. Try blazing fast Gemini call with 3.5s timeout
+        for model_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}]
@@ -101,7 +101,7 @@ Responde EXCLUSIVAMENTE en formato JSON válido con la siguiente estructura:
                 payload["generationConfig"] = {"response_mime_type": "application/json"}
 
             try:
-                async with httpx.AsyncClient(timeout=25.0) as client:
+                async with httpx.AsyncClient(timeout=3.5) as client:
                     res = await client.post(url, json=payload)
                     if res.status_code == 200:
                         result_json = res.json()
@@ -123,12 +123,10 @@ Responde EXCLUSIVAMENTE en formato JSON válido con la siguiente estructura:
                             parsed = self._parse_gemini_response(data, original_title)
                             parsed["is_gta6"] = is_gta6
                             return parsed
-                    else:
-                        logger.warning(f"{model_name} returned status {res.status_code}, trying next model...")
             except Exception as e:
-                logger.warning(f"Error querying {model_name}: {e}")
+                logger.debug(f"Fast AI attempt {model_name} bypassed: {e}")
 
-        return self._heuristic_analysis(transcript, original_title, streamer_name, game_name, is_gta6)
+        return self.generate_smart_viral_title(original_title, streamer_name, game_name, transcript)
 
     def _parse_gemini_response(self, data: dict, original_title: str) -> dict:
         return {
@@ -140,6 +138,131 @@ Responde EXCLUSIVAMENTE en formato JSON válido con la siguiente estructura:
             "should_publish": bool(data.get("should_publish", True))
         }
 
+    def generate_smart_viral_title(
+        self,
+        original_title: str = "",
+        streamer_name: str = "",
+        game_name: str = "",
+        transcript: str = ""
+    ) -> Dict[str, Any]:
+        """
+        High-Conversion Viral Engine: Generates click-worthy, algorithm-friendly titles
+        in Spanish specifically tuned for YouTube Shorts, TikTok, and Instagram Reels algorithms.
+        """
+        import re
+        raw_s = (streamer_name or "").strip()
+        # Clean streamer name: "Fanum (AMP)" -> "Fanum"
+        clean_s = re.sub(r'\(.*?\)', '', raw_s).strip()
+        s_upper = clean_s.upper() if clean_s else ""
+        s_lower = clean_s.lower()
+
+        t_clean = (original_title or "").strip()
+        # Remove streamer name prefixes if present in original title ("carola - ...")
+        t_text = re.sub(r'^(?:[\w\s]+[:\-]\s*)', '', t_clean).lower()
+        combined = f"{t_text} {transcript or ''}".lower()
+
+        is_gta = self.is_gta6_content(game_name, original_title, transcript) or self.is_any_gta_content(game_name, original_title, transcript)
+
+        if is_gta:
+            # 1. First time / loading / starting
+            if any(k in combined for k in ["first time", "primera vez", "loads", "starts", "inicia", "comienza", "empezando", "playthrough"]):
+                title = f"¡{s_upper} PRUEBA GTA 6 POR PRIMERA VEZ! 🌴😱" if s_upper else "¡PRIMERA VEZ JUGANDO A GTA 6! 🌴😱"
+            # 2. Lucia / Jason / characters
+            elif "lucia" in combined:
+                title = f"¡{s_upper} REACCIONA A LUCIA EN GTA 6! 🚨🔥" if s_upper else "¡LUCIA EN ACCIÓN EN GTA 6! 🚨🔥"
+            elif "jason" in combined:
+                title = f"¡JASON Y LUCIA EN ACCIÓN EN GTA 6! 🚗💨"
+            # 3. Dominican / specific cultural hype
+            elif "dominican" in combined or "rd" in combined:
+                title = f"¡DOMINICANO SUELTO EN VICE CITY! GTA 6 🇩🇴🔥"
+            # 4. Babies in GTA
+            elif any(k in combined for k in ["baby", "babys", "bebe", "bebé"]):
+                title = f"¡KAI CENAT ENCUENTRA UN BEBÉ EN GTA 6! 👶💀" if "kai" in s_lower else "¡HAY BEBÉS EN GTA 6! 👶😱"
+            # 5. Police / Cops / SWAT / 5 stars
+            elif any(k in combined for k in ["police", "policia", "policía", "cop", "swat", "5 estrellas", "cinco estrellas", "persecucion", "persecución", "arrest"]):
+                title = "¡LA POLICÍA DE GTA 6 NO TIENE PIEDAD! 🚨💀"
+            # 6. Stealing cars / Heist
+            elif any(k in combined for k in ["steal", "roba", "robando", "carro", "coche", "atraco", "heist"]):
+                title = f"¡{s_upper} ROBA SU PRIMER COCHE EN GTA 6! 🏎️💨" if s_upper else "¡ROBANDO EL PRIMER COCHE EN GTA 6! 🏎️💨"
+            # 7. Roleplay / Rol
+            elif re.search(r'\b(?:rol|roleplay|rp)\b', combined):
+                title = f"¡{s_upper} HACE ROLEPLAY EN GTA 6 Y ES CINE! 🎭🔥" if s_upper else "¡EL ROLEPLAY EN GTA 6 ES CINE PURO! 🎭🔥"
+            # 8. Graphics / Florida / Realism
+            elif any(k in combined for k in ["graphic", "grafico", "gráfico", "florida", "real", "visual", "look", "hype"]):
+                title = f"¡{s_upper} SE VUELVE LOCO CON LOS GRÁFICOS DE GTA 6! 🤯🌴" if s_upper else "¡LOS GRÁFICOS DE GTA 6 SON DE OTRA ÉPOCA! 🤯🌴"
+            # 9. Opps / Mission / First mission
+            elif any(k in combined for k in ["opp", "opps", "mission", "mision", "misión"]):
+                title = f"¡PRIMERA MISIÓN DE GTA 6 Y TERMINA ASÍ! 💀🚓"
+            # 10. Tears / Crying / Emotional
+            elif any(k in combined for k in ["cry", "llorar", "lagrimas", "emocion", "quiero llorar"]):
+                title = f"¡{s_upper} CASI LLORA DE LA EMOCIÓN CON GTA 6! 😭🌴" if s_upper else "¡MOMENTO EMOTIVO EN GTA 6! 😭🌴"
+            # 11. Long awaited release / Extensible
+            elif any(k in combined for k in ["llegó el día", "llego el dia", "extensible", "espera"]):
+                title = f"¡LLEGÓ EL DÍA! {s_upper} JUEGA GTA 6 TRAS AÑOS DE ESPERA ✨🌴" if s_upper else "¡LLEGÓ EL DÍA DE GTA 6! ✨🌴"
+            # 12. Strip Club / Nightlife
+            elif any(k in combined for k in ["strip", "club", "dance", "baile"]):
+                title = "¡VISITANDO EL STRIP CLUB EN GTA 6! 🔞🌴"
+            # 13. Bugs / Glitches / Physics
+            elif any(k in combined for k in ["bug", "glitch", "fisica", "fisicas"]):
+                title = "¡EL PRIMER BUG ÉPICO DE GTA 6! 😂🌴"
+            # 14. NPC interactions / Hilarious moments
+            elif any(k in combined for k in ["saludo", "npc", "exitado", "locura", "loco", "wtf"]):
+                title = f"¡{s_upper} NO SE PUEDE CREER ESTO EN GTA 6! 😂🌴" if s_upper else "¡UN NPC HACE ESTO EN GTA 6! 💀😂"
+            else:
+                if s_upper:
+                    title = f"¡{s_upper} HACE HISTORIA EN GTA 6! 🔥🌴"
+                else:
+                    title = f"¡EL MOMENTO MÁS VIRAL DE GTA 6! 🌴🔥"
+
+            return {
+                "score": 9.6,
+                "category": "clutch" if any(k in combined for k in ["mision", "misión", "police", "atraco"]) else "funny",
+                "title": title,
+                "description": f"¿Qué opinas de este momentazo de {clean_s or 'GTA 6'} en Vice City? ¡Comenta abajo y suscríbete para los mejores clips diarios de GTA VI! 🌴🎮",
+                "hashtags": "#GTA6 #GTAVI #GrandTheftAutoVI #ViceCity #GTA6Clips #Viral #Gaming #Shorts #TikTok #Reels #FYP",
+                "should_publish": True,
+                "is_gta6": True
+            }
+
+        # Non-GTA viral generator
+        if "rubius" in s_lower:
+            title = f"¡RUBIUS LA VUELVE A LIAR EN DIRECTO! 😂🔥"
+        elif "illojuan" in s_lower:
+            title = f"¡ILLOJUAN NO AGUANTA LA RISA CON ESTO! 💀😂"
+        elif "xokas" in s_lower or "elxokas" in s_lower:
+            title = f"¡ELXOKAS SE CABREA EN DIRECTO! 🤬🔥"
+        elif "thegrefg" in s_lower:
+            title = f"¡THEGREFG EN UN MOMENTO ÉPICO! 😱🔥"
+        elif "auron" in s_lower:
+            title = f"¡AURONPLAY TOTALMENTE BASADO! 😂✨"
+        elif "ibai" in s_lower:
+            title = f"¡IBAI SE QUEDA SIN PALABRAS! 🤯🔥"
+        elif "westcol" in s_lower:
+            title = f"¡WESTCOL NO TIENE FILTRO EN ESTE CLIP! 💀🔥"
+        elif "kai" in s_lower:
+            title = f"¡KAI CENAT HACE ESTA LOCURA EN STREAM! 😱🔥"
+        elif "xqc" in s_lower:
+            title = f"¡XQC PIERDE LA CABEZA EN VIVO! 💀😂"
+        elif "spreen" in s_lower:
+            title = f"¡SPREEN CON UNA JUGADA IMPOSIBLE! 🏆🔥"
+        elif "rivers" in s_lower:
+            title = f"¡RIVERS SE ENFADA EN DIRECTO! 😂🔥"
+        else:
+            base = t_clean or f"Momento increíble de {clean_s}"
+            if len(base) > 50:
+                base = base[:47] + "..."
+            title = f"¡{base}! 🔥"
+
+        return {
+            "score": 8.0,
+            "category": "funny",
+            "title": title,
+            "description": f"Lo mejor del directo de {clean_s or 'Twitch/Kick'}. ¡Sígueme para no perderte ningún clip viral diario!",
+            "hashtags": f"#shorts #{clean_s.lower() or 'streamer'} #gaming #twitchclips #tiktok #reels #viral #fyp",
+            "should_publish": True,
+            "is_gta6": False
+        }
+
     def _heuristic_analysis(
         self,
         transcript: str,
@@ -148,28 +271,4 @@ Responde EXCLUSIVAMENTE en formato JSON válido con la siguiente estructura:
         game_name: str,
         is_gta6: bool = False
     ) -> Dict[str, Any]:
-        """Fallback analysis when Gemini API is unavailable."""
-        if is_gta6:
-            return {
-                "score": 9.2,
-                "category": "clutch",
-                "title": f"¡{streamer_name} en GTA 6 es una locura! 🔥",
-                "description": f"¡Lo que acaba de pasar en GTA 6 en directo con {streamer_name}! ¿Qué te parece Vice City?",
-                "hashtags": "#GTA6 #GTAVI #GrandTheftAutoVI #ViceCity #GTA6Clips #Gaming #Shorts #TikTok",
-                "should_publish": True,
-                "is_gta6": True
-            }
-
-        title = original_title or (f"Momento increíble de {streamer_name}" if streamer_name else "¡Tienes que ver esto!")
-        if len(title) > 55:
-            title = title[:52] + "..."
-
-        return {
-            "score": 7.5,
-            "category": "funny",
-            "title": f"¡{title}! 🔥",
-            "description": f"Lo mejor del directo de {streamer_name or 'Twitch/Kick'}. ¡Sígueme para más clips diarios!",
-            "hashtags": f"#shorts #{streamer_name.lower() or 'streamer'} #gaming #twitchclips #tiktok #reels",
-            "should_publish": True,
-            "is_gta6": False
-        }
+        return self.generate_smart_viral_title(original_title, streamer_name, game_name, transcript)

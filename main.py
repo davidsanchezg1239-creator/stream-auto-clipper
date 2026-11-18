@@ -235,7 +235,18 @@ def get_radar_status(db: Session = Depends(get_db)):
 # --- Clips Management APIs ---
 @app.get("/api/clips")
 def get_clips(db: Session = Depends(get_db)):
-    clips = db.query(ClipTask).order_by(ClipTask.id.desc()).limit(50).all()
+    from sqlalchemy import case
+    status_priority = case(
+        (ClipTask.status == "READY_TO_PUBLISH", 1),
+        (ClipTask.status == "DOWNLOADING", 2),
+        (ClipTask.status == "TRANSCRIBING", 2),
+        (ClipTask.status == "ANALYZING", 2),
+        (ClipTask.status == "EDITING", 2),
+        (ClipTask.status == "PENDING", 3),
+        (ClipTask.status == "PUBLISHED", 4),
+        else_=5
+    )
+    clips = db.query(ClipTask).order_by(status_priority, ClipTask.id.desc()).limit(150).all()
     results = []
     for c in clips:
         ch = c.channel
@@ -284,6 +295,28 @@ async def add_custom_clip(payload: CustomClipCreate, background_tasks: Backgroun
     layout = payload.layout or "blur"
     background_tasks.add_task(pipeline.process_clip, task.id, layout=layout)
     return {"message": "Clip queued for processing", "task_id": task.id}
+
+@app.post("/api/clips/prioritize-gta")
+async def prioritize_gta_clips(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Fast-tracks all pending GTA 6 and top-streamer clips to the front of the queue.
+    """
+    pending = db.query(ClipTask).filter(ClipTask.status.in_(["PENDING", "FAILED"])).all()
+    prioritized_count = 0
+    top_streamers = {"fanum", "carola", "auronplay", "kaicenat", "rubius", "jynxzi", "xqc", "djmariio", "illojuan", "elxokas", "thegrefg", "spreen", "westcol"}
+    for c in pending:
+        title = (c.original_title or "").lower()
+        ch = c.channel
+        s_name = (ch.channel_name if ch else "").lower()
+        is_gta = "gta" in title or "vice" in title or "lucia" in title or "carola" in title or "fanum" in title or "auron" in title or "kai" in title or s_name in top_streamers
+        if is_gta:
+            background_tasks.add_task(pipeline.process_clip, c.id)
+            prioritized_count += 1
+    return {
+        "success": True,
+        "message": f"¡{prioritized_count} clips de GTA 6 puestos al frente de la cola de renderizado!",
+        "count": prioritized_count
+    }
 
 @app.post("/api/clips/{clip_id}/process")
 async def reprocess_clip(clip_id: int, background_tasks: BackgroundTasks, layout: str = "blur", db: Session = Depends(get_db)):

@@ -537,6 +537,9 @@
               <span id="clips-counter-badge" style="font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 12px; color: #a5b4fc; font-weight: 700;">0 clips</span>
             </div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-left: auto;">
+              <button class="btn-primary" style="padding: 5px 12px; font-size: 11px; background: linear-gradient(135deg, #ec4899, #f43f5e); border: none;" onclick="prioritizeGtaClips(this)" title="Salta todos los clips de GTA 6 al frente de la cola de procesamiento">
+                ⚡ Procesar GTA 6 Primero
+              </button>
               <button class="btn-primary" style="padding: 5px 12px; font-size: 11px;" onclick="openCompilationModal()">
                 🎬 Compilar (10 min)
               </button>
@@ -818,6 +821,40 @@
           btn.innerHTML = origText;
           btn.disabled = false;
         }
+      }
+    }
+
+    async function prioritizeGtaClips(btn) {
+      const orig = btn ? btn.innerHTML : '⚡ Procesar GTA 6 Primero';
+      if (btn) {
+        btn.innerHTML = '⚡ Priorizando...';
+        btn.disabled = true;
+      }
+      showToast('🚀 Poniendo todos los clips de GTA 6 al frente de la cola de procesamiento...');
+      try {
+        const res = await fetch('/api/clips/prioritize-gta', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || '¡Clips de GTA 6 priorizados!');
+        await loadClips();
+      } catch (e) {
+        showToast('Error al priorizar clips: ' + e);
+      } finally {
+        if (btn) {
+          btn.innerHTML = orig;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function prioritizeSingleClip(id) {
+      showToast(`⚡ Priorizando Clip #${id}...`);
+      try {
+        const res = await fetch(`/api/clips/${id}/process`, { method: 'POST' });
+        const data = await res.json();
+        showToast(`Clip #${id} puesto a renderizar`);
+        await loadClips();
+      } catch (e) {
+        showToast('Error: ' + e);
       }
     }
 
@@ -1341,9 +1378,27 @@
               </div>
             </td>
             <td>
-              <span class="status-pill status-${c.status}" style="cursor: pointer;" onclick="toggleClipStatusQuick(${c.id})" title="Clic para alternar entre SUBIDO y PENDIENTE">
-                ${c.status === 'PUBLISHED' ? '✓ SUBIDO' : c.status}
-              </span>
+              ${(() => {
+                if (c.status === 'PUBLISHED') {
+                  return `<span class="status-pill status-PUBLISHED" style="cursor: pointer;" onclick="toggleClipStatusQuick(${c.id})" title="Clic para alternar entre SUBIDO y PENDIENTE">✓ SUBIDO</span>`;
+                } else if (c.status === 'READY_TO_PUBLISH') {
+                  return `<span class="status-pill status-READY_TO_PUBLISH" style="cursor: pointer;" onclick="toggleClipStatusQuick(${c.id})" title="Clic para alternar entre SUBIDO y PENDIENTE">✅ LISTO HD</span>`;
+                } else if (c.status === 'DOWNLOADING') {
+                  return `<span class="status-pill status-DOWNLOADING">📥 Descargando...</span>`;
+                } else if (c.status === 'TRANSCRIBING') {
+                  return `<span class="status-pill status-TRANSCRIBING">🎙️ Subtítulos...</span>`;
+                } else if (c.status === 'ANALYZING') {
+                  return `<span class="status-pill status-ANALYZING">🧠 Analizando...</span>`;
+                } else if (c.status === 'EDITING') {
+                  return `<span class="status-pill status-EDITING">⚙️ Render 9:16</span>`;
+                } else if (c.status === 'FAILED') {
+                  return `<span class="status-pill status-FAILED" title="${c.error_message || ''}">❌ Fallido</span>`;
+                } else {
+                  return isGta6
+                    ? `<span class="status-pill" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);" title="En cola para renderizar">⏳ En Cola GTA</span>`
+                    : `<span class="status-pill status-PENDING">⏳ En Espera</span>`;
+                }
+              })()}
               ${renderPublishBadges(c.publish_logs)}
             </td>
             <td>
@@ -1353,10 +1408,13 @@
                   <a href="/api/clips/${c.id}/download" class="btn-primary" style="padding: 4px 10px; font-size: 11px; text-decoration: none; background: linear-gradient(135deg, #10b981, #059669); display: inline-flex; align-items: center; gap: 3px;" title="Descargar MP4 en 1080p">📥 Descargar</a>
                   <button onclick="copyClipPackQuick(${c.id})" class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Copiar Título y Tags">📋 Pack</button>
                   <button onclick="deleteSingleClip(${c.id})" style="background: none; border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer;" title="Eliminar clip y liberar espacio">🗑️</button>
-                ` : `
-                  <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄 Reintentar</button>
+                ` : (c.status === 'FAILED' ? `
+                  <button onclick="reprocessClip(${c.id})" class="btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.4);">🔄 Reintentar</button>
                   <button onclick="deleteSingleClip(${c.id})" style="background: none; border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer;" title="Eliminar clip">🗑️</button>
-                `}
+                ` : `
+                  <button onclick="prioritizeSingleClip(${c.id})" class="btn-secondary" style="padding: 4px 9px; font-size: 11px; color: #fbbf24; border-color: rgba(251,191,36,0.4);" title="Forzar procesamiento inmediato de este clip">⚡ Procesar Ya</button>
+                  <button onclick="deleteSingleClip(${c.id})" style="background: none; border: 1px solid rgba(239,68,68,0.4); color: #ef4444; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer;" title="Eliminar clip">🗑️</button>
+                `)}
               </div>
             </td>
           </tr>
