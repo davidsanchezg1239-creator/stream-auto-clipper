@@ -323,6 +323,39 @@
       border-radius: 6px;
     }
 
+    /* Tab Filters */
+    .tab-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: rgba(99, 102, 241, 0.6);
+      color: #a5b4fc;
+    }
+    .tab-pill {
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.12);
+      padding: 1px 7px;
+      border-radius: 10px;
+      color: #fff;
+      font-weight: 700;
+    }
+
     /* Modal */
     .modal {
       display: none;
@@ -543,6 +576,9 @@
               <button class="btn-primary" style="padding: 5px 12px; font-size: 11px;" onclick="openCompilationModal()">
                 🎬 Compilar (10 min)
               </button>
+              <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; color: #f59e0b; border-color: rgba(245,158,11,0.4);" onclick="cleanupPendingClips()" title="Limpia los clips en cola pendientes para no saturar">
+                🧹 Limpiar Cola
+              </button>
               <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.4);" onclick="deleteSelectedClips()">
                 🗑️ Eliminar (<span id="delete-selected-count">0</span>)
               </button>
@@ -551,6 +587,22 @@
               </button>
               <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px;" onclick="loadClips()">Actualizar</button>
             </div>
+          </div>
+
+          <!-- Navigation Filter Tabs -->
+          <div style="display: flex; gap: 8px; margin: 10px 0 14px 0; border-bottom: 1px solid var(--card-border); padding-bottom: 12px; flex-wrap: wrap;">
+            <button id="tab-ready" class="tab-btn active" onclick="switchClipTab('ready')">
+              ✅ Listos para Descargar HD <span id="tab-count-ready" class="tab-pill" style="background: rgba(16,185,129,0.25); color: #10b981;">0</span>
+            </button>
+            <button id="tab-gta" class="tab-btn" onclick="switchClipTab('gta')">
+              🌴 Solo GTA 6 <span id="tab-count-gta" class="tab-pill" style="background: rgba(236,72,153,0.25); color: #ec4899;">0</span>
+            </button>
+            <button id="tab-processing" class="tab-btn" onclick="switchClipTab('processing')">
+              ⏳ En Cola / Renderizando <span id="tab-count-processing" class="tab-pill" style="background: rgba(245,158,11,0.25); color: #f59e0b;">0</span>
+            </button>
+            <button id="tab-all" class="tab-btn" onclick="switchClipTab('all')">
+              📁 Todos los Clips <span id="tab-count-all" class="tab-pill">0</span>
+            </button>
           </div>
           <div style="overflow-x: auto;">
             <table class="clips-table">
@@ -1320,17 +1372,59 @@
       }
     }
 
+    let currentClipTab = 'ready';
+
+    function switchClipTab(tab) {
+      currentClipTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(`tab-${tab}`);
+      if (activeBtn) activeBtn.classList.add('active');
+      loadClips();
+    }
+
+    async function loadClipsStats() {
+      try {
+        const res = await fetch('/api/clips/stats');
+        const data = await res.json();
+        const rEl = document.getElementById('tab-count-ready');
+        const gEl = document.getElementById('tab-count-gta');
+        const pEl = document.getElementById('tab-count-processing');
+        const aEl = document.getElementById('tab-count-all');
+        if (rEl) rEl.innerText = data.ready;
+        if (gEl) gEl.innerText = data.gta;
+        if (pEl) pEl.innerText = data.processing;
+        if (aEl) aEl.innerText = data.total;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function cleanupPendingClips() {
+      if (!confirm('¿Eliminar todos los clips pendientes de la cola para liberar recursos y evitar saturación?')) return;
+      try {
+        const res = await fetch('/api/clips/cleanup-pending', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Cola pendiente limpiada');
+        await loadClips();
+        await loadClipsStats();
+      } catch (e) {
+        alert('Error al limpiar cola: ' + e);
+      }
+    }
+
     async function loadClips() {
       try {
-        const res = await fetch('/api/clips');
+        const res = await fetch(`/api/clips?tab=${currentClipTab}&limit=200`);
         const clips = await res.json();
         window.currentClips = clips;
         const tbody = document.getElementById('clips-tbody');
         const countBadge = document.getElementById('clips-counter-badge');
         if (countBadge) countBadge.innerText = `${clips.length} clips`;
 
+        loadClipsStats();
+
         if (!clips || clips.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No hay clips procesados aún.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No hay clips en esta categoría. Puedes cambiar de pestaña arriba.</td></tr>`;
           return;
         }
 

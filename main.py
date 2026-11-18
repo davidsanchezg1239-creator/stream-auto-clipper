@@ -234,8 +234,12 @@ def get_radar_status(db: Session = Depends(get_db)):
 
 # --- Clips Management APIs ---
 @app.get("/api/clips")
-def get_clips(db: Session = Depends(get_db)):
-    from sqlalchemy import case
+def get_clips(
+    tab: Optional[str] = "all",
+    limit: int = 200,
+    db: Session = Depends(get_db)
+):
+    from sqlalchemy import case, or_
     status_priority = case(
         (ClipTask.status == "READY_TO_PUBLISH", 1),
         (ClipTask.status == "DOWNLOADING", 2),
@@ -246,7 +250,22 @@ def get_clips(db: Session = Depends(get_db)):
         (ClipTask.status == "PUBLISHED", 4),
         else_=5
     )
-    clips = db.query(ClipTask).order_by(status_priority, ClipTask.id.desc()).limit(150).all()
+
+    query = db.query(ClipTask)
+    if tab == "ready":
+        query = query.filter(ClipTask.status == "READY_TO_PUBLISH")
+    elif tab == "processing":
+        query = query.filter(ClipTask.status.in_(["PENDING", "DOWNLOADING", "TRANSCRIBING", "ANALYZING", "EDITING"]))
+    elif tab == "gta":
+        query = query.filter(or_(
+            ClipTask.original_title.ilike("%gta%"),
+            ClipTask.ai_title.ilike("%gta%"),
+            ClipTask.ai_hashtags.ilike("%gta%"),
+            ClipTask.original_title.ilike("%vice%"),
+            ClipTask.original_title.ilike("%lucia%")
+        ))
+
+    clips = query.order_by(status_priority, ClipTask.id.desc()).limit(limit).all()
     results = []
     for c in clips:
         ch = c.channel
@@ -278,6 +297,34 @@ def get_clips(db: Session = Depends(get_db)):
             "publish_logs": logs_summary
         })
     return results
+
+@app.get("/api/clips/stats")
+def get_clips_stats(db: Session = Depends(get_db)):
+    from sqlalchemy import or_
+    ready_count = db.query(ClipTask).filter(ClipTask.status == "READY_TO_PUBLISH").count()
+    proc_count = db.query(ClipTask).filter(ClipTask.status.in_(["PENDING", "DOWNLOADING", "TRANSCRIBING", "ANALYZING", "EDITING"])).count()
+    gta_count = db.query(ClipTask).filter(or_(
+        ClipTask.original_title.ilike("%gta%"),
+        ClipTask.ai_title.ilike("%gta%"),
+        ClipTask.ai_hashtags.ilike("%gta%")
+    )).count()
+    total_count = db.query(ClipTask).count()
+    return {
+        "ready": ready_count,
+        "processing": proc_count,
+        "gta": gta_count,
+        "total": total_count
+    }
+
+@app.post("/api/clips/cleanup-pending")
+def cleanup_pending_clips(db: Session = Depends(get_db)):
+    """Removes pending clips to free up and unclutter queue."""
+    pending = db.query(ClipTask).filter(ClipTask.status == "PENDING").all()
+    count = len(pending)
+    for c in pending:
+        db.delete(c)
+    db.commit()
+    return {"success": True, "message": f"Se eliminaron {count} clips pendientes de la cola.", "deleted_count": count}
 
 @app.post("/api/clips/custom")
 async def add_custom_clip(payload: CustomClipCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

@@ -42,8 +42,9 @@ class Settings(BaseSettings):
     INSTAGRAM_ACCESS_TOKEN: str = ""
     TIKTOK_ACCESS_TOKEN: str = ""
 
-    # Polling frequency in seconds
-    CHECK_INTERVAL_SECONDS: int = 60
+    # Polling frequency in seconds (3 minutes to avoid flood)
+    CHECK_INTERVAL_SECONDS: int = 180
+    MAX_CLIPS_PER_SCAN: int = 2
 
     # Auto-Pilot & GTA 6 Turbo Radar Settings
     AUTO_PUBLISH_VIRAL: bool = False

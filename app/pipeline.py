@@ -70,12 +70,15 @@ class ClipperPipeline:
         logger.info("🎯 [GLOBAL GTA RADAR] Scanning top GTA clips across Twitch & Kick...")
         count = 0
 
-        # 1. Twitch Top GTA Clips
+        # 1. Twitch Top GTA Clips (curated top 4)
         try:
-            twitch_gta = await self.twitch_monitor.fetch_top_gta_clips(limit=20)
+            twitch_gta = await self.twitch_monitor.fetch_top_gta_clips(limit=4)
             for clip_item in twitch_gta:
                 clip_url = clip_item.get("url")
                 if not clip_url:
+                    continue
+                # Only take clips with real views (ignore spam)
+                if int(clip_item.get("view_count", 0) or 0) < 25:
                     continue
                 existing = db.query(ClipTask).filter(ClipTask.source_url == clip_url).first()
                 if not existing:
@@ -110,9 +113,9 @@ class ClipperPipeline:
         except Exception as e:
             logger.error(f"Error in Twitch GTA Radar: {e}")
 
-        # 2. Kick Top GTA Clips
+        # 2. Kick Top GTA Clips (curated top 3)
         try:
-            kick_gta = await self.kick_monitor.fetch_top_gta_clips(limit=10)
+            kick_gta = await self.kick_monitor.fetch_top_gta_clips(limit=3)
             for clip_item in kick_gta:
                 clip_url = clip_item.get("clip_url") or clip_item.get("url")
                 if not clip_url:
@@ -152,8 +155,8 @@ class ClipperPipeline:
 
         return count
 
-    def _filter_and_prioritize_clips(self, raw_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filters clips by ideal vertical short duration (10s - 90s) and prioritizes GTA 6 and high views."""
+    def _filter_and_prioritize_clips(self, raw_clips: List[Dict[str, Any]], max_clips: int = 2) -> List[Dict[str, Any]]:
+        """Filters clips by ideal vertical short duration (10s - 90s) and keeps only the top 1-2 most viral moments."""
         valid = []
         for c in raw_clips:
             dur = float(c.get("duration", 30.0) or 30.0)
@@ -164,12 +167,13 @@ class ClipperPipeline:
         def score_clip(clip_item):
             title = (clip_item.get("title") or "").lower()
             views = int(clip_item.get("view_count", 0) or 0)
-            gta_keywords = ["gta", "vice city", "lucia", "jason", "rockstar", "heist", "atraco", "policia", "persecucion", "5 estrellas"]
+            gta_keywords = ["gta 6", "gta vi", "vice city", "lucia", "jason", "rockstar", "atraco", "policia", "persecucion", "5 estrellas", "gta"]
             is_gta = any(k in title for k in gta_keywords)
-            return (1 if is_gta else 0, views)
+            priority_score = 3 if ("gta 6" in title or "gta vi" in title or "vice city" in title) else (2 if is_gta else 1)
+            return (priority_score, views)
 
         valid.sort(key=score_clip, reverse=True)
-        return valid
+        return valid[:max_clips]
 
     async def check_channel(self, channel_id: int) -> Dict[str, Any]:
         """Checks status of a single channel and imports new clips if live."""
@@ -214,15 +218,15 @@ class ClipperPipeline:
 
                 if user_id and channel.auto_clip_enabled:
                     is_gta_turbo = is_gta6 or is_any_gta
-                    fetch_limit = 15 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 4)
+                    fetch_limit = 4 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (2 if is_live else 1)
                     if is_gta_turbo:
-                        logger.info(f"🚨 [GTA RADAR] Twitch {channel.channel_name} is LIVE on GTA ({channel.stream_game}: {channel.stream_title})! Fetching {fetch_limit} clips.")
+                        logger.info(f"🚨 [GTA RADAR] Twitch {channel.channel_name} is LIVE on GTA ({channel.stream_game}: {channel.stream_title})! Fetching top {fetch_limit} clips.")
                     raw_clips = await self.twitch_monitor.fetch_recent_clips(
                         user_id,
                         started_at=status_data.get("started_at") if is_live else None,
                         limit=fetch_limit
                     )
-                    clips_data = self._filter_and_prioritize_clips(raw_clips)
+                    clips_data = self._filter_and_prioritize_clips(raw_clips, max_clips=2 if is_gta_turbo else 1)
 
             elif platform == "kick":
                 status_data = await self.kick_monitor.get_stream_status(channel.channel_name)
@@ -245,11 +249,11 @@ class ClipperPipeline:
 
                 if channel.auto_clip_enabled:
                     is_gta_turbo = is_gta6 or is_any_gta
-                    fetch_limit = 15 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 3)
+                    fetch_limit = 4 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (2 if is_live else 1)
                     if is_gta_turbo:
-                        logger.info(f"🚨 [GTA RADAR] Kick {channel.channel_name} is LIVE on GTA ({channel.stream_game})! Fetching {fetch_limit} clips.")
+                        logger.info(f"🚨 [GTA RADAR] Kick {channel.channel_name} is LIVE on GTA ({channel.stream_game})! Fetching top {fetch_limit} clips.")
                     raw_clips = await self.kick_monitor.fetch_recent_clips(channel.channel_name, limit=fetch_limit)
-                    clips_data = self._filter_and_prioritize_clips(raw_clips)
+                    clips_data = self._filter_and_prioritize_clips(raw_clips, max_clips=2 if is_gta_turbo else 1)
 
             db.commit()
 
