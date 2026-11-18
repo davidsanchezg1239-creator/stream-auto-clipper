@@ -74,3 +74,16 @@ class KickMonitor:
         except Exception as e:
             logger.error(f"Error fetching Kick clips for {slug}: {e}")
         return []
+
+    async def fetch_top_gta_clips(self, limit: int = 15) -> List[Dict[str, Any]]:
+        """Fetches top trending clips from Kick's GTA V category."""
+        url = "https://kick.com/api/v2/categories/grand-theft-auto-v/clips"
+        try:
+            async with httpx.AsyncClient(timeout=10.0, headers=self.headers, follow_redirects=True) as client:
+                res = await client.get(url, params={"sort": "view", "time": "week"})
+                if res.status_code == 200:
+                    clips_data = res.json().get("clips", [])
+                    return clips_data[:limit]
+        except Exception as e:
+            logger.error(f"Error fetching Kick GTA category clips: {e}")
+        return []

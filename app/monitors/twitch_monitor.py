@@ -152,3 +152,38 @@ class TwitchMonitor:
         except Exception as e:
             logger.error(f"Error fetching clips for broadcaster {broadcaster_id}: {e}")
         return []
+
+    async def fetch_top_gta_clips(self, limit: int = 25) -> List[Dict[str, Any]]:
+        """
+        Fetches the top trending clips across all of Twitch for GTA V and GTA VI categories.
+        Guarantees that viral GTA moments are captured even if the streamer was not in the preset roster.
+        """
+        has_token = await self._ensure_token()
+        if not has_token:
+            return []
+
+        headers = {
+            "Client-ID": self.client_id,
+            "Authorization": f"Bearer {self.access_token}"
+        }
+        started_at = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        all_clips = []
+        # GTA V (32982) and GTA VI (1867279146)
+        for g_id in ["32982", "1867279146"]:
+            url = "https://api.twitch.tv/helix/clips"
+            params = {
+                "game_id": g_id,
+                "first": limit,
+                "started_at": started_at
+            }
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    res = await client.get(url, headers=headers, params=params)
+                    if res.status_code == 200:
+                        all_clips.extend(res.json().get("data", []))
+            except Exception as e:
+                logger.error(f"Error fetching Twitch GTA clips for game {g_id}: {e}")
+
+        all_clips.sort(key=lambda x: x.get("view_count", 0), reverse=True)
+        return all_clips[:limit]

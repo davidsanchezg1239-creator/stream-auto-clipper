@@ -10,8 +10,19 @@ class ClipAnalyzer:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
 
+    def is_any_gta_content(self, game_name: str, title: str, transcript: str) -> bool:
+        """Detects whether content is related to ANY Grand Theft Auto game (GTA V, GTA RP, or GTA VI)."""
+        combined = f"{game_name} {title} {transcript}".lower()
+        gta_broad_keywords = [
+            "grand theft auto", "gta", "vice city", "vicecity", "rockstar games", "rockstar",
+            "nopixel", "marbella vice", "spainrp", "london rp", "roleplay", "gtarp",
+            "atraco", "persecucion", "persecución", "5 estrellas", "los santos",
+            "lucia", "jason", "leonida"
+        ]
+        return any(k in combined for k in gta_broad_keywords)
+
     def is_gta6_content(self, game_name: str, title: str, transcript: str) -> bool:
-        """Detects whether content is related to GTA 6 / Grand Theft Auto VI / Vice City."""
+        """Detects whether content is specifically related to GTA 6 / Grand Theft Auto VI / Vice City."""
         combined = f"{game_name} {title} {transcript}".lower()
         keywords = [
             "gta 6", "gta vi", "gta6", "gtavi", "grand theft auto vi", "grand theft auto 6",

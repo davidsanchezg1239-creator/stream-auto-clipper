@@ -126,6 +126,19 @@ async def trigger_scan(background_tasks: BackgroundTasks):
     background_tasks.add_task(pipeline.scan_all_channels)
     return {"message": "Scan triggered"}
 
+@app.post("/api/scan/gta")
+async def trigger_gta_scan(background_tasks: BackgroundTasks):
+    """Triggers dedicated GTA Global Radar across Twitch & Kick."""
+    async def run_gta():
+        from app.database import SessionLocal
+        db = SessionLocal()
+        try:
+            await pipeline.scan_gta_global_radar(db)
+        finally:
+            db.close()
+    background_tasks.add_task(run_gta)
+    return {"message": "Caza global de clips de GTA iniciada en segundo plano"}
+
 # --- GTA 6 Radar & Pre-seeded Streamers ---
 GTA6_PRESET_STREAMERS = [
     # Top GTA Roleplay & Tier-1 Spanish / Latam Gaming Streamers

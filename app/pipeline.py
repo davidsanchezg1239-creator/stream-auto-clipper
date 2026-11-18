@@ -35,6 +35,7 @@ class ClipperPipeline:
         self.compiler = VideoCompiler()
         self.yt_publisher = YouTubePublisher()
         self.social_dispatcher = SocialDispatcher()
+        self.render_semaphore = asyncio.Semaphore(2)
 
     async def scan_all_channels(self) -> Dict[str, Any]:
         """Scans all registered channels to check live status and harvest clips."""
@@ -45,13 +46,89 @@ class ClipperPipeline:
             for ch in channels:
                 try:
                     res = await self.check_channel(ch.id)
-                    if res and res.get("is_gta6") and res.get("is_live"):
+                    if res and (res.get("is_gta6") or res.get("is_gta")) and res.get("is_live"):
                         gta6_active.append(ch.channel_name)
                 except Exception as e:
                     logger.error(f"Error checking channel {ch.channel_name}: {e}")
-            return {"scanned": len(channels), "gta6_active": gta6_active}
+
+            # Also run the Global GTA Category Radar (captures top trending GTA clips on Twitch and Kick)
+            try:
+                gta_clips_found = await self.scan_gta_global_radar(db)
+            except Exception as e:
+                logger.error(f"Error in GTA global radar: {e}")
+                gta_clips_found = 0
+
+            return {"scanned": len(channels), "gta6_active": gta6_active, "gta_clips_discovered": gta_clips_found}
         finally:
             db.close()
+
+    async def scan_gta_global_radar(self, db: Session) -> int:
+        """
+        Global GTA Hunter: Scans top trending GTA V and GTA VI clips directly from Twitch and Kick.
+        Harvests viral moments from all streamers playing GTA even if not in the default roster.
+        """
+        logger.info("🎯 [GLOBAL GTA RADAR] Scanning top GTA clips across Twitch & Kick...")
+        count = 0
+
+        # 1. Twitch Top GTA Clips
+        try:
+            twitch_gta = await self.twitch_monitor.fetch_top_gta_clips(limit=20)
+            for clip_item in twitch_gta:
+                clip_url = clip_item.get("url")
+                if not clip_url:
+                    continue
+                existing = db.query(ClipTask).filter(ClipTask.source_url == clip_url).first()
+                if not existing:
+                    broadcaster = clip_item.get("broadcaster_name", "GTA Streamer")
+                    # Try to link to channel if exists
+                    ch = db.query(Channel).filter(Channel.channel_name == broadcaster.lower(), Channel.platform == "twitch").first()
+                    task = ClipTask(
+                        channel_id=ch.id if ch else None,
+                        source_platform="twitch",
+                        source_url=clip_url,
+                        original_title=f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}",
+                        duration_seconds=clip_item.get("duration", 30.0),
+                        status="PENDING"
+                    )
+                    db.add(task)
+                    db.commit()
+                    db.refresh(task)
+                    count += 1
+                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Twitch clip queued: {task.original_title} ({clip_url})")
+                    asyncio.create_task(self.process_clip(task.id))
+        except Exception as e:
+            logger.error(f"Error in Twitch GTA Radar: {e}")
+
+        # 2. Kick Top GTA Clips
+        try:
+            kick_gta = await self.kick_monitor.fetch_top_gta_clips(limit=10)
+            for clip_item in kick_gta:
+                clip_url = clip_item.get("clip_url") or clip_item.get("url")
+                if not clip_url:
+                    continue
+                existing = db.query(ClipTask).filter(ClipTask.source_url == clip_url).first()
+                if not existing:
+                    channel_info = clip_item.get("channel", {})
+                    broadcaster = channel_info.get("username", "Kick GTA")
+                    ch = db.query(Channel).filter(Channel.channel_name == broadcaster.lower(), Channel.platform == "kick").first()
+                    task = ClipTask(
+                        channel_id=ch.id if ch else None,
+                        source_platform="kick",
+                        source_url=clip_url,
+                        original_title=f"{broadcaster}: {clip_item.get('title', 'Momento GTA')}",
+                        duration_seconds=clip_item.get("duration", 30.0),
+                        status="PENDING"
+                    )
+                    db.add(task)
+                    db.commit()
+                    db.refresh(task)
+                    count += 1
+                    logger.info(f"🎯 [GTA RADAR DISCOVERY] Kick clip queued: {task.original_title} ({clip_url})")
+                    asyncio.create_task(self.process_clip(task.id))
+        except Exception as e:
+            logger.error(f"Error in Kick GTA Radar: {e}")
+
+        return count
 
     def _filter_and_prioritize_clips(self, raw_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filters clips by ideal vertical short duration (10s - 90s) and prioritizes GTA 6 and high views."""
@@ -98,7 +175,11 @@ class ClipperPipeline:
                     is_gta6 = self.analyzer.is_gta6_content(
                         channel.stream_game or "", channel.stream_title or "", ""
                     )
+                    is_any_gta = self.analyzer.is_any_gta_content(
+                        channel.stream_game or "", channel.stream_title or "", ""
+                    )
                 else:
+                    is_any_gta = False
                     # If offline, resolve user_id via get_user_info so we can harvest 48h clips
                     if not user_id:
                         user_info = await self.twitch_monitor.get_user_info(channel.channel_name)
@@ -110,9 +191,10 @@ class ClipperPipeline:
                                 channel.display_name = user_info.get("display_name")
 
                 if user_id and channel.auto_clip_enabled:
-                    fetch_limit = 12 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 4)
-                    if is_gta6:
-                        logger.info(f"🚨 [GTA 6 RADAR] Twitch {channel.channel_name} is LIVE on GTA VI ({channel.stream_title})! Fetching {fetch_limit} clips.")
+                    is_gta_turbo = is_gta6 or is_any_gta
+                    fetch_limit = 15 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 4)
+                    if is_gta_turbo:
+                        logger.info(f"🚨 [GTA RADAR] Twitch {channel.channel_name} is LIVE on GTA ({channel.stream_game}: {channel.stream_title})! Fetching {fetch_limit} clips.")
                     raw_clips = await self.twitch_monitor.fetch_recent_clips(
                         user_id,
                         started_at=status_data.get("started_at") if is_live else None,
@@ -130,19 +212,26 @@ class ClipperPipeline:
                     is_gta6 = self.analyzer.is_gta6_content(
                         channel.stream_game or "", channel.stream_title or "", ""
                     )
+                    is_any_gta = self.analyzer.is_any_gta_content(
+                        channel.stream_game or "", channel.stream_title or "", ""
+                    )
+                else:
+                    is_any_gta = False
+
                 if not channel.display_name and status_data.get("display_name"):
                     channel.display_name = status_data.get("display_name")
 
                 if channel.auto_clip_enabled:
-                    fetch_limit = 12 if (is_gta6 and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 3)
-                    if is_gta6:
-                        logger.info(f"🚨 [GTA 6 RADAR] Kick {channel.channel_name} is LIVE on GTA VI! Fetching {fetch_limit} clips.")
+                    is_gta_turbo = is_gta6 or is_any_gta
+                    fetch_limit = 15 if (is_gta_turbo and settings.GTA6_TURBO_ENABLED) else (6 if is_live else 3)
+                    if is_gta_turbo:
+                        logger.info(f"🚨 [GTA RADAR] Kick {channel.channel_name} is LIVE on GTA ({channel.stream_game})! Fetching {fetch_limit} clips.")
                     raw_clips = await self.kick_monitor.fetch_recent_clips(channel.channel_name, limit=fetch_limit)
                     clips_data = self._filter_and_prioritize_clips(raw_clips)
 
             db.commit()
 
-            # Process discovered clips
+            # Process discovered clips concurrently (non-blocking)
             for clip_item in clips_data:
                 clip_url = clip_item.get("url")
                 if not clip_url:
@@ -164,10 +253,10 @@ class ClipperPipeline:
                     db.refresh(task)
                     logger.info(f"Discovered new clip: {task.original_title} ({clip_url})")
 
-                    # Process the new clip in background
-                    await self.process_clip(task.id)
+                    # Dispatch clip processing in non-blocking background task
+                    asyncio.create_task(self.process_clip(task.id))
 
-            return {"is_live": is_live, "is_gta6": is_gta6}
+            return {"is_live": is_live, "is_gta6": is_gta6 or is_any_gta}
 
         finally:
             db.close()
@@ -176,114 +265,122 @@ class ClipperPipeline:
         """
         Executes full pipeline:
         Download -> Transcribe -> Gemini Analysis -> Face Tracking -> Subtitles -> Vertical Render
+        Uses render_semaphore to ensure controlled concurrency.
         """
-        db: Session = SessionLocal()
-        try:
-            task = db.query(ClipTask).filter(ClipTask.id == clip_task_id).first()
-            if not task:
-                return
+        async with self.render_semaphore:
+            db: Session = SessionLocal()
+            try:
+                task = db.query(ClipTask).filter(ClipTask.id == clip_task_id).first()
+                if not task:
+                    return
 
-            logger.info(f"Starting processing for Clip #{task.id}: {task.original_title or task.source_url}")
+                logger.info(f"Starting processing for Clip #{task.id}: {task.original_title or task.source_url}")
 
-            # 1. Download
-            task.status = "DOWNLOADING"
-            db.commit()
-            dl_res = await self.recorder.download_clip(task.source_url, custom_filename=f"clip_{task.id}")
-            if not dl_res.get("success"):
-                task.status = "FAILED"
-                task.error_message = f"Download failed: {dl_res.get('error')}"
+                # 1. Download
+                task.status = "DOWNLOADING"
                 db.commit()
-                return
+                dl_res = await self.recorder.download_clip(task.source_url, custom_filename=f"clip_{task.id}")
+                if not dl_res.get("success"):
+                    task.status = "FAILED"
+                    task.error_message = f"Download failed: {dl_res.get('error')}"
+                    db.commit()
+                    return
 
-            task.download_path = dl_res.get("file_path")
-            task.duration_seconds = dl_res.get("duration", 30.0)
-            if not task.original_title:
-                task.original_title = dl_res.get("title", "")
-            db.commit()
-
-            # 2. Transcribe Audio
-            task.status = "TRANSCRIBING"
-            db.commit()
-            trans_res = await self.transcriber.transcribe(task.download_path)
-            task.transcript_text = trans_res.get("full_text", "")
-            task.transcript_segments_json = json.dumps(trans_res.get("segments", []))
-            db.commit()
-
-            # 3. AI Analysis & Hook Generation
-            task.status = "ANALYZING"
-            db.commit()
-            channel_name = task.channel.channel_name if task.channel else ""
-            game_name = task.channel.stream_game if task.channel else ""
-            analysis = await self.analyzer.analyze_clip(
-                transcript=task.transcript_text,
-                original_title=task.original_title,
-                streamer_name=channel_name,
-                game_name=game_name
-            )
-            task.ai_score = analysis.get("score", 7.0)
-            task.ai_category = analysis.get("category", "funny")
-            task.ai_title = analysis.get("title", task.original_title)
-            task.ai_description = analysis.get("description", "")
-            task.ai_hashtags = analysis.get("hashtags", "")
-            db.commit()
-
-            # 4. Face Detection & Subtitles
-            task.status = "EDITING"
-            db.commit()
-            face_box = self.face_tracker.detect_streamer_webcam(task.download_path)
-            
-            # Check for GTA 6 content for specialized Vice City subtitles
-            is_gta6 = self.analyzer.is_gta6_content(
-                game_name=game_name,
-                title=task.original_title or "",
-                transcript=task.transcript_text or ""
-            )
-            sub_style = "vice_city" if is_gta6 else "default"
-            if is_gta6:
-                logger.info(f"🌴 [GTA 6 DETECTED] Applying Vice City neon subtitles for clip #{task.id}")
-
-            # Generate Subtitles file (.ass)
-            sub_file = str(Path(task.download_path).with_suffix(".ass"))
-            segments = json.loads(task.transcript_segments_json or "[]")
-            self.sub_generator.generate_ass(segments, sub_file, style=sub_style)
-            task.subtitle_ass_path = sub_file
-
-            # 5. Render 9:16 Vertical Short
-            vert_filename = f"short_{task.id}.mp4"
-            render_res = await self.video_processor.render_vertical_short(
-                input_video=task.download_path,
-                output_filename=vert_filename,
-                face_box=face_box,
-                subtitle_ass_path=sub_file,
-                layout=layout
-            )
-
-            if render_res.get("success"):
-                task.processed_path_vertical = render_res.get("output_path")
-                task.status = "READY_TO_PUBLISH"
-                task.error_message = None
-                db.commit()
-                logger.info(f"Clip #{task.id} successfully processed and ready at: {task.processed_path_vertical}")
-
-                # 6. Auto-Pilot Mode: auto-publish if enabled and score qualifies
-                if settings.AUTO_PUBLISH_VIRAL and (task.ai_score or 0.0) >= settings.AUTO_PUBLISH_MIN_SCORE:
-                    logger.info(f"🚀 [AUTO-PILOT ACTIVATED] Clip #{task.id} scored {task.ai_score} >= {settings.AUTO_PUBLISH_MIN_SCORE}. Auto-publishing to YouTube, TikTok and Instagram...")
-                    try:
-                        await self.auto_publish_clip(task.id)
-                    except Exception as pub_err:
-                        logger.error(f"Auto-pilot publication error for clip #{task.id}: {pub_err}")
-            else:
-                task.status = "FAILED"
-                task.error_message = f"Render failed: {render_res.get('error')}"
+                task.download_path = dl_res.get("file_path")
+                task.duration_seconds = dl_res.get("duration", 30.0)
+                if not task.original_title:
+                    task.original_title = dl_res.get("title", "")
                 db.commit()
 
-        except Exception as e:
-            logger.error(f"Error in pipeline for clip #{clip_task_id}: {e}")
-            task.status = "FAILED"
-            task.error_message = str(e)
-            db.commit()
-        finally:
-            db.close()
+                # 2. Transcribe Audio
+                task.status = "TRANSCRIBING"
+                db.commit()
+                trans_res = await self.transcriber.transcribe(task.download_path)
+                task.transcript_text = trans_res.get("full_text", "")
+                task.transcript_segments_json = json.dumps(trans_res.get("segments", []))
+                db.commit()
+
+                # 3. AI Analysis & Hook Generation
+                task.status = "ANALYZING"
+                db.commit()
+                channel_name = task.channel.channel_name if task.channel else ""
+                game_name = task.channel.stream_game if task.channel else ""
+                analysis = await self.analyzer.analyze_clip(
+                    transcript=task.transcript_text,
+                    original_title=task.original_title,
+                    streamer_name=channel_name,
+                    game_name=game_name
+                )
+                task.ai_score = analysis.get("score", 7.0)
+                task.ai_category = analysis.get("category", "funny")
+                task.ai_title = analysis.get("title", task.original_title)
+                task.ai_description = analysis.get("description", "")
+                task.ai_hashtags = analysis.get("hashtags", "")
+                db.commit()
+
+                # 4. Face Detection & Subtitles
+                task.status = "EDITING"
+                db.commit()
+                face_box = self.face_tracker.detect_streamer_webcam(task.download_path)
+                
+                # Check for GTA content for specialized Vice City subtitles
+                is_gta6 = self.analyzer.is_gta6_content(
+                    game_name=game_name,
+                    title=task.original_title or "",
+                    transcript=task.transcript_text or ""
+                )
+                is_any_gta = self.analyzer.is_any_gta_content(
+                    game_name=game_name,
+                    title=task.original_title or "",
+                    transcript=task.transcript_text or ""
+                )
+                sub_style = "vice_city" if (is_gta6 or is_any_gta) else "default"
+                if is_gta6 or is_any_gta:
+                    logger.info(f"🌴 [GTA CONTENT DETECTED] Applying Vice City neon subtitles for clip #{task.id}")
+
+                # Generate Subtitles file (.ass)
+                sub_file = str(Path(task.download_path).with_suffix(".ass"))
+                segments = json.loads(task.transcript_segments_json or "[]")
+                self.sub_generator.generate_ass(segments, sub_file, style=sub_style)
+                task.subtitle_ass_path = sub_file
+
+                # 5. Render 9:16 Vertical Short
+                vert_filename = f"short_{task.id}.mp4"
+                render_res = await self.video_processor.render_vertical_short(
+                    input_video=task.download_path,
+                    output_filename=vert_filename,
+                    face_box=face_box,
+                    subtitle_ass_path=sub_file,
+                    layout=layout
+                )
+
+                if render_res.get("success"):
+                    task.processed_path_vertical = render_res.get("output_path")
+                    task.status = "READY_TO_PUBLISH"
+                    task.error_message = None
+                    db.commit()
+                    logger.info(f"Clip #{task.id} successfully processed and ready at: {task.processed_path_vertical}")
+
+                    # 6. Auto-Pilot Mode: auto-publish if enabled and score qualifies
+                    if settings.AUTO_PUBLISH_VIRAL and (task.ai_score or 0.0) >= settings.AUTO_PUBLISH_MIN_SCORE:
+                        logger.info(f"🚀 [AUTO-PILOT ACTIVATED] Clip #{task.id} scored {task.ai_score} >= {settings.AUTO_PUBLISH_MIN_SCORE}. Auto-publishing...")
+                        try:
+                            await self.auto_publish_clip(task.id)
+                        except Exception as pub_err:
+                            logger.error(f"Auto-pilot publication error for clip #{task.id}: {pub_err}")
+                else:
+                    task.status = "FAILED"
+                    task.error_message = f"Render failed: {render_res.get('error')}"
+                    db.commit()
+
+            except Exception as e:
+                logger.error(f"Error in pipeline for clip #{clip_task_id}: {e}")
+                if 'task' in locals() and task:
+                    task.status = "FAILED"
+                    task.error_message = str(e)
+                    db.commit()
+            finally:
+                db.close()
 
     async def auto_publish_clip(self, clip_task_id: int) -> dict:
         """Publishes an edited vertical short to YouTube Shorts and social media."""

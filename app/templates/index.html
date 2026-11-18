@@ -447,10 +447,13 @@
           <span>🌴 GTA VI RADAR:</span>
           <span id="radar-text" style="color: #00f2fe;">STANDBY</span>
         </div>
-        <button class="btn-secondary" style="background: linear-gradient(135deg, rgba(255,0,128,0.18), rgba(99,102,241,0.18)); border: 1px solid rgba(255,0,128,0.4); color: #ff99dd;" onclick="seedGta6Streamers()">
-          🎮 Roster GTA 6 (1-Click)
+        <button class="btn-primary" style="background: linear-gradient(135deg, #ff007f, #00f2fe); border: none; font-weight: 800; font-size: 12px; box-shadow: 0 0 14px rgba(255, 0, 128, 0.4);" onclick="triggerGtaScan(this)">
+          🌴 Cazar Clips GTA
         </button>
-        <button class="btn-secondary" onclick="scanChannels()">🔄 Escanear Ahora</button>
+        <button class="btn-secondary" style="background: linear-gradient(135deg, rgba(255,0,128,0.18), rgba(99,102,241,0.18)); border: 1px solid rgba(255,0,128,0.4); color: #ff99dd;" onclick="seedGta6Streamers()">
+          🎮 Roster GTA (29 Streamers)
+        </button>
+        <button class="btn-secondary" onclick="scanChannels(this)">🔄 Escanear Canales</button>
         <button class="btn-primary" onclick="openTestClipModal()">✨ Probar con un Clip URL</button>
       </div>
     </header>
@@ -793,6 +796,28 @@
         }
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    async function triggerGtaScan(btn) {
+      const origText = btn ? btn.innerHTML : '🌴 Cazar Clips GTA';
+      if (btn) {
+        btn.innerHTML = '🌴 Cazando GTA...';
+        btn.disabled = true;
+      }
+      showToast('🎯 Buscando los clips más virales de GTA en Twitch y Kick...');
+      try {
+        const res = await fetch('/api/scan/gta', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Caza de clips GTA iniciada');
+        setTimeout(loadClips, 4000);
+      } catch (e) {
+        showToast('Error al escanear GTA: ' + e);
+      } finally {
+        if (btn) {
+          btn.innerHTML = origText;
+          btn.disabled = false;
+        }
       }
     }
 
