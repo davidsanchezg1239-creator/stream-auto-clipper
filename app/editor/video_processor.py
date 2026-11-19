@@ -51,30 +51,34 @@ class VideoProcessor:
         output_path = str(self.processed_dir / output_filename)
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Decide layout
+        # Decide layout: "split" is primary viral format; "center" is fallback when no cam
         chosen_layout = layout
         if chosen_layout == "auto":
-            if face_box and face_box.get("w", 0) > 120:
+            if face_box and face_box.get("w", 0) > 60:
                 chosen_layout = "split"
             else:
-                chosen_layout = "blur"
+                chosen_layout = "center"
 
         # Build video filters based on layout
         if chosen_layout == "split" and face_box:
             fx, fy, fw, fh = face_box["x"], face_box["y"], face_box["w"], face_box["h"]
+            # Gold-Standard Viral Streamer Short:
+            # Top: Streamer reaction cam (1080x720)
+            # Bottom: Gameplay action (1080x1200)
+            # Divider: 4px sleek neon accent line
             filters = [
                 "[0:v]split=2[cam_in][game_in]",
-                f"[cam_in]crop={fw}:{fh}:{fx}:{fy},scale=1080:640:force_original_aspect_ratio=increase,crop=1080:640[cam]",
-                "[game_in]crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1280[game]",
-                "[cam][game]vstack=inputs=2[base_v]"
+                f"[cam_in]crop={fw}:{fh}:{fx}:{fy},scale=1080:720:force_original_aspect_ratio=increase,crop=1080:720[cam]",
+                "[game_in]crop=ih*1080/1200:ih:(iw-ih*1080/1200)/2:0,scale=1080:1200[game]",
+                "[cam][game]vstack=inputs=2,drawbox=x=0:y=718:w=1080:h=4:color=0x00FFCC@0.9:t=fill[base_v]"
             ]
-        elif chosen_layout == "center":
-            # Direct full-screen vertical zoom on the center
+        elif chosen_layout == "center" or chosen_layout == "fullscreen":
+            # True 9:16 Full-screen vertical zoom on the center gameplay action (no black bars, no blur)
             filters = [
                 "[0:v]crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920[base_v]"
             ]
         else:
-            # Default "blur": Beautiful ambient blurred background
+            # Explicit legacy "blur" option (only used if explicitly requested)
             filters = [
                 "[0:v]split=2[bg_in][fg_in]",
                 "[bg_in]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:5[bg]",

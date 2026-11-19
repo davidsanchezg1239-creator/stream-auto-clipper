@@ -355,10 +355,11 @@ class ClipperPipeline:
                 task.ai_hashtags = analysis.get("hashtags", "")
                 db.commit()
 
-                # 4. Face Detection & Subtitles
+                # 4. Face / Webcam Detection & Subtitles
                 task.status = "EDITING"
                 db.commit()
-                face_box = self.face_tracker.detect_streamer_webcam(task.download_path)
+                streamer_ref = (task.channel.channel_name if task.channel else "") or (task.channel.display_name if task.channel else "") or task.original_title or ""
+                face_box = self.face_tracker.detect_streamer_webcam(task.download_path, streamer_name=streamer_ref)
                 
                 # Check for GTA content for specialized Vice City subtitles
                 is_gta6 = self.analyzer.is_gta6_content(

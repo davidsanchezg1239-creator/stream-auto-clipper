@@ -75,7 +75,7 @@ class AutoPilotPayload(BaseModel):
 class CustomClipCreate(BaseModel):
     clip_url: str
     channel_id: Optional[int] = None
-    layout: Optional[str] = "blur"  # "blur", "center", or "split"
+    layout: Optional[str] = "auto"  # "auto", "split", "center", or "blur"
 
 class CompilationCreate(BaseModel):
     title: str
@@ -339,7 +339,7 @@ async def add_custom_clip(payload: CustomClipCreate, background_tasks: Backgroun
     db.refresh(task)
 
     # Launch processing pipeline asynchronously
-    layout = payload.layout or "blur"
+    layout = payload.layout or "auto"
     background_tasks.add_task(pipeline.process_clip, task.id, layout=layout)
     return {"message": "Clip queued for processing", "task_id": task.id}
 
@@ -366,7 +366,7 @@ async def prioritize_gta_clips(background_tasks: BackgroundTasks, db: Session = 
     }
 
 @app.post("/api/clips/{clip_id}/process")
-async def reprocess_clip(clip_id: int, background_tasks: BackgroundTasks, layout: str = "blur", db: Session = Depends(get_db)):
+async def reprocess_clip(clip_id: int, background_tasks: BackgroundTasks, layout: str = "auto", db: Session = Depends(get_db)):
     task = db.query(ClipTask).filter(ClipTask.id == clip_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Clip not found")

@@ -92,3 +92,27 @@ def find_ffmpeg_binary() -> str:
             except Exception:
                 return str(p)
     return settings.FFMPEG_PATH
+
+def find_ffprobe_binary() -> str:
+    """Finds ffprobe binary in PATH or common Windows winget/custom locations."""
+    which_bin = shutil.which(settings.FFPROBE_PATH)
+    if which_bin:
+        try:
+            return str(Path(which_bin).resolve())
+        except Exception:
+            return which_bin
+
+    # Common Windows installation paths (Winget, Scoop, Program Files)
+    possible_paths = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Links" / "ffprobe.exe",
+        Path(os.environ.get("PROGRAMFILES", "")) / "ffmpeg" / "bin" / "ffprobe.exe",
+        Path("C:/ffmpeg/bin/ffprobe.exe"),
+        Path(os.environ.get("USERPROFILE", "")) / "scoop" / "shims" / "ffprobe.exe",
+    ]
+    for p in possible_paths:
+        if p.exists():
+            try:
+                return str(p.resolve())
+            except Exception:
+                return str(p)
+    return settings.FFPROBE_PATH

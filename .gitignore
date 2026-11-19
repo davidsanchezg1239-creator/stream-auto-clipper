@@ -46,6 +46,9 @@ storage/downloads/*
 storage/processed/*
 storage/compilations/*
 storage/*.png
+storage/*.jpg
+storage/*.mp4
+storage/*.ass
 !storage/downloads/.gitkeep
 !storage/processed/.gitkeep
 !storage/compilations/.gitkeep
